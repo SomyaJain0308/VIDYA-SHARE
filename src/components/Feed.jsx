@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, BookOpen } from 'lucide-react';
+import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateWhatsAppLink } from '../utils/whatsapp';
@@ -28,6 +28,7 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
   const [savedOffers, setSavedOffers] = useState([]);
   const [sellerProfiles, setSellerProfiles] = useState({});
   const [activeProfile, setActiveProfile] = useState(null);
+  const [featuredBookIndex, setFeaturedBookIndex] = useState(0);
 
   const categories = ['All', 'Books', 'Uniforms'];
   const recencyOptions = [
@@ -251,24 +252,52 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
       return timeB - timeA;
     });
 
+  const bookNotices = processedNotices.filter((notice) => notice.category === 'Books');
+  useEffect(() => {
+    if (bookNotices.length === 0) {
+      setFeaturedBookIndex(0);
+      return;
+    }
+    setFeaturedBookIndex((prev) => Math.min(prev, bookNotices.length - 1));
+  }, [bookNotices.length]);
+
   const isBooksShowcase = categoryFilter !== 'Uniforms';
-  const featuredBook = processedNotices.find((notice) => notice.category === 'Books') || null;
+  const featuredBook = bookNotices[featuredBookIndex] || null;
   const featuredStatusMeta = getStatusMeta(featuredBook?.status || 'active');
   const featuredMetadata = featuredBook ? getMetadataChips(featuredBook) : [];
   const featuredTrust = featuredBook ? sanitizeTrustLine(getTrustLine(featuredBook)) : '';
   const featuredSaved = featuredBook ? savedOffers.includes(featuredBook.id) : false;
   const featuredGhostWord = buildGhostWord(featuredBook?.title || 'Books');
+  const featuredCountLabel = bookNotices.length > 0 ? `${String(featuredBookIndex + 1).padStart(2, '0')} / ${String(bookNotices.length).padStart(2, '0')}` : '00 / 00';
+  const featuredLocationLine = featuredBook?.school
+    ? featuredBook.school
+    : featuredBook
+      ? 'City-wide pickup across Saharanpur'
+      : 'Library showcase loading';
+  const featuredConnectLink = featuredBook
+    ? generateWhatsAppLink(featuredBook.sellerPhone || '', featuredBook.title, featuredBook.school, 'EN', featuredBook.successNote)
+    : null;
+  const shiftFeaturedBook = (direction) => {
+    if (bookNotices.length <= 1) return;
+    setFeaturedBookIndex((prev) => {
+      const nextIndex = prev + direction;
+      if (nextIndex < 0) return bookNotices.length - 1;
+      if (nextIndex >= bookNotices.length) return 0;
+      return nextIndex;
+    });
+  };
 
   return (
     <div className="market-feed mx-auto w-full max-w-[1400px] pb-14 pt-2">
       {isBooksShowcase ? (
-        <section className="relative overflow-hidden rounded-[2rem] border border-amber-200/20 bg-gradient-to-b from-[#160f06]/70 via-[#0f0a04]/55 to-[#090603]/30 p-5 backdrop-blur-[2px] sm:p-6">
+        <>
+        <section className="relative overflow-hidden rounded-[2rem] border border-amber-200/20 bg-gradient-to-b from-[#140e06]/60 via-[#0f0903]/30 to-transparent p-5 sm:p-6">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_8%,rgba(239,198,88,0.24),transparent_48%),radial-gradient(circle_at_80%_10%,rgba(255,255,255,0.1),transparent_38%)]" />
           <div className="relative z-10">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/72">Book Spotlight</p>
-                <h2 className="font-display text-2xl font-semibold text-amber-50 sm:text-3xl">Library Picks, First Deal Featured</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/72">Book Showcase</p>
+                <h2 className="font-display text-2xl font-semibold text-amber-50 sm:text-3xl">A premium stage for every listed book</h2>
               </div>
               <div className="hidden items-center gap-2 rounded-full border border-amber-200/30 bg-amber-200/10 px-3 py-1 text-xs font-semibold text-amber-100 md:flex">
                 <ShieldCheck className="h-3.5 w-3.5" />
@@ -276,210 +305,258 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
               </div>
             </div>
 
-            <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                    categoryFilter === cat
-                      ? 'bg-amber-200 text-[#382607] shadow-[0_12px_30px_-16px_rgba(212,175,55,0.95)]'
-                      : 'border border-amber-200/20 bg-[#1a1207]/70 text-amber-100/82 hover:bg-[#281b0a]/85'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            <div className="book-stage relative overflow-hidden rounded-[1.9rem] border border-amber-200/18 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_22%,rgba(255,229,156,0.14),transparent_18%),linear-gradient(180deg,rgba(8,5,2,0.08),rgba(8,5,2,0.18)_36%,rgba(8,5,2,0.26)_100%)]" />
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-[58%] overflow-hidden">
+                <div className="book-stage__ghost text-center font-[Sora] text-[5.25rem] font-extrabold uppercase leading-none tracking-[-0.08em] text-white/16 sm:text-[7rem] lg:text-[12rem]">
+                  {featuredGhostWord}
+                </div>
+              </div>
 
-            <div className="book-stage relative overflow-hidden rounded-[1.8rem] border border-amber-200/20 bg-[#090603]/35 px-4 py-5 sm:px-6 sm:py-6">
-              <div className="book-stage__grid grid min-h-[560px] gap-6 lg:grid-cols-[0.95fr_1.2fr]">
-                <div className="relative z-20 order-2 flex flex-col justify-between lg:order-1">
-                  <div>
+              <div className="relative z-10 flex min-h-[660px] flex-col justify-between gap-8">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="max-w-[460px]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">Featured Book</p>
                     {featuredBook ? (
                       <>
-                        <h3 className="font-display mt-2 max-w-xl text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl lg:text-[3.4rem]">
+                        <h3 className="font-display mt-2 text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl lg:text-[3.5rem]">
                           {featuredBook.title}
                         </h3>
-                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-amber-100/78 sm:text-base">
-                          {featuredBook.successNote || 'Trusted student listing with quick neighborhood handover support.'}
+                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-amber-100/80 sm:text-base">
+                          {featuredBook.successNote || 'Trusted student listing with easy handover, premium visibility, and neighborhood trust built in.'}
                         </p>
-                        {featuredMetadata.length > 0 && (
-                          <div className="mt-5 flex max-w-lg flex-wrap gap-2">
-                            {featuredMetadata.map((chip) => (
-                              <span
-                                key={`featured-${chip}`}
-                                className="rounded-full border border-amber-200/25 bg-[#1a1207]/80 px-3 py-1.5 text-[11px] font-semibold text-amber-100/88"
-                              >
-                                {chip}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </>
                     ) : (
                       <>
-                        <h3 className="font-display mt-2 max-w-xl text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl lg:text-[3.4rem]">
-                          New semester favorites loading soon
+                        <h3 className="font-display mt-2 text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl lg:text-[3.5rem]">
+                          Book showcases are getting ready
                         </h3>
-                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-amber-100/78 sm:text-base">
-                          Keep your library-inspired feed ready. The first verified book offer will appear here as a spotlight deal.
+                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-amber-100/80 sm:text-base">
+                          The first live book will appear here as a dramatic centerpiece instead of getting buried inside ordinary cards.
                         </p>
                       </>
                     )}
                   </div>
 
-                  <div className="mt-8 flex flex-col gap-5">
-                    <div className="flex flex-wrap items-end gap-4">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/55">Offer Price</p>
-                        <p className="font-display mt-1 text-4xl font-semibold text-amber-200 sm:text-5xl">
-                          {featuredBook ? (Number(featuredBook.price) === 0 ? 'Free' : `Rs ${featuredBook.price}`) : 'Coming Soon'}
-                        </p>
-                      </div>
-                      {featuredBook && (
-                        <>
-                          <span className={`rounded-full px-3 py-1 text-xs font-bold ${featuredStatusMeta.badgeClass}`}>{featuredStatusMeta.label}</span>
-                          <span className="rounded-full border border-amber-200/25 bg-[#1a1207]/70 px-3 py-1 text-xs font-semibold text-amber-100/85">
-                            {timeAgo(featuredBook.createdAt)}
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => featuredBook && toggleSaveOffer(featuredBook.id)}
-                        className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-6 py-3 text-sm font-bold text-[#322206] shadow-[0_18px_35px_-18px_rgba(212,175,55,0.9)] transition hover:brightness-105"
-                      >
-                        <ShoppingBag className={`h-4 w-4 ${featuredSaved ? 'fill-current' : ''}`} />
-                        {featuredSaved ? 'Offer Saved' : 'Save Offer'}
-                      </button>
-                      {featuredBook && (
-                        <a
-                          href={generateWhatsAppLink(
-                            featuredBook.sellerPhone || '',
-                            featuredBook.title,
-                            featuredBook.school,
-                            'EN',
-                            featuredBook.successNote
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-amber-200/35 px-5 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
-                        >
-                          Connect
-                        </a>
-                      )}
-                    </div>
-
-                    {featuredBook && <p className="truncate text-xs text-amber-100/72">{featuredTrust}</p>}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {featuredBook && (
+                      <>
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${featuredStatusMeta.badgeClass}`}>{featuredStatusMeta.label}</span>
+                        <span className="rounded-full border border-amber-200/25 bg-[#1a1207]/55 px-3 py-1 text-xs font-semibold text-amber-100/82">
+                          {timeAgo(featuredBook.createdAt)}
+                        </span>
+                      </>
+                    )}
+                    <span className="rounded-full border border-amber-200/25 bg-[#1a1207]/55 px-3 py-1 text-xs font-semibold text-amber-100/82">
+                      {featuredLocationLine}
+                    </span>
                   </div>
                 </div>
 
-                <div className="relative order-1 flex min-h-[320px] items-center justify-center lg:order-2 lg:min-h-[520px]">
-                  <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden">
-                    <div className="book-stage__ghost text-center font-[Sora] text-[5.25rem] font-extrabold uppercase leading-none tracking-[-0.08em] text-white/18 sm:text-[7rem] lg:text-[10rem]">
-                      {featuredGhostWord}
-                    </div>
-                  </div>
-
-                  <div className="book-hero relative h-[340px] w-[250px] sm:h-[420px] sm:w-[300px]">
+                <div className="relative flex min-h-[320px] flex-1 items-center justify-center py-2 sm:min-h-[420px] lg:min-h-[500px]">
+                  <div className="book-hero relative h-[350px] w-[250px] sm:h-[460px] sm:w-[330px] lg:h-[560px] lg:w-[400px]">
+                    <div className="book-hero__glow absolute inset-x-[-16%] bottom-[16%] top-[18%]" />
                     {[3, 2, 1].map((trail) => (
-                      <div
-                        key={trail}
-                        className={`book-hero__trail book-hero__trail--${trail} absolute inset-0 overflow-hidden rounded-[1.8rem] border border-amber-100/10 bg-[#1a1207]/10`}
-                      >
-                        {featuredBook?.photoUrl && (
-                          <img src={featuredBook.photoUrl} alt="" aria-hidden="true" className="h-full w-full object-cover" />
-                        )}
+                      <div key={trail} className={`book-hero__trail book-hero__trail--${trail} absolute inset-0`}>
+                        <div className="book-hero__trail-cover h-full w-full rounded-[2rem]" />
                       </div>
                     ))}
 
-                    <div className="book-hero__shadow absolute inset-x-[12%] bottom-2 h-10 rounded-full bg-black/60 blur-2xl" />
+                    <div className="book-hero__shadow absolute inset-x-[8%] bottom-2 h-14 rounded-full bg-black/75 blur-[28px]" />
                     <div className="book-hero__core absolute inset-0">
-                      <div className="book-hero__pages absolute right-[-10px] top-[16px] h-[88%] w-5 rounded-r-[1rem] bg-gradient-to-b from-[#f6e8be] via-[#e3cf9a] to-[#8d6d2a]" />
-                      <div className="book-hero__cover absolute inset-0 overflow-hidden rounded-[1.8rem] border border-amber-100/30 bg-[#120d06] shadow-[0_35px_70px_-28px_rgba(0,0,0,0.95)]">
-                        {featuredBook?.photoUrl ? (
-                          <>
-                            <img src={featuredBook.photoUrl} alt={featuredBook.title} className="h-full w-full object-cover" />
-                            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.28),transparent_20%,transparent_55%,rgba(0,0,0,0.2))]" />
-                            <div className="absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/30 to-transparent" />
-                          </>
-                        ) : (
-                          <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#221708] via-[#181005] to-[#100902] text-amber-100/75">
-                            <BookOpen className="mb-4 h-14 w-14" />
-                            <p className="px-8 text-center text-base font-semibold">
-                              {featuredBook ? 'Cover image will appear here' : 'Your next great book deal'}
-                            </p>
-                          </div>
-                        )}
+                      <div className="book-hero__object absolute inset-0">
+                        <div className="book-hero__backplate absolute inset-[14px_18px_6px_26px] rounded-[2rem]" />
+                        <div className="book-hero__spine absolute bottom-[8px] left-[-18px] top-[12px] w-[38px] rounded-l-[1.4rem]" />
+                        <div className="book-hero__pageblock absolute bottom-[14px] right-[-26px] top-[22px] w-[54px] rounded-r-[1.5rem]" />
+                        <div className="book-hero__cover absolute inset-0 overflow-hidden rounded-[2rem] border border-amber-100/28 bg-[#120d06] shadow-[0_42px_90px_-34px_rgba(0,0,0,0.98)]">
+                          {featuredBook?.photoUrl ? (
+                            <>
+                              <img src={featuredBook.photoUrl} alt={featuredBook.title} className="h-full w-full object-cover" />
+                              <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.26),transparent_18%,transparent_52%,rgba(0,0,0,0.3)),linear-gradient(180deg,rgba(10,6,2,0.06),rgba(10,6,2,0.68)_88%)]" />
+                              <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-black/36 to-transparent" />
+                              <div className="absolute inset-x-4 bottom-4 rounded-[1.1rem] border border-amber-100/18 bg-black/28 px-4 py-3 backdrop-blur-md">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-50/70">Vidya Share Selection</p>
+                                <p className="mt-1 line-clamp-2 text-base font-semibold text-amber-50">{featuredBook.title}</p>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="book-cover-fallback flex h-full w-full flex-col justify-between bg-[radial-gradient(circle_at_50%_18%,rgba(255,224,139,0.38),transparent_22%),linear-gradient(160deg,#3d2a0c_0%,#221507_38%,#120a03_100%)] px-6 py-6 text-amber-50">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-50/72">Vidya Share Edition</p>
+                                <div className="mt-4 h-px w-20 bg-amber-200/30" />
+                              </div>
+                              <div>
+                                <p className="font-display text-3xl font-semibold leading-[1.02] text-amber-50 sm:text-[2.6rem]">
+                                  {featuredBook ? featuredBook.title : 'Trusted books, staged beautifully'}
+                                </p>
+                                <p className="mt-3 text-sm leading-relaxed text-amber-50/78">
+                                  {featuredBook
+                                    ? featuredBook.successNote || 'Student-trusted offer ready for direct handover.'
+                                    : 'Your first live listing will turn this into a premium product showcase.'}
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-50/78">
+                                <span>{featuredBook ? featuredLocationLine : 'Saharanpur network'}</span>
+                                <BookOpen className="h-4 w-4" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-end">
+                  <div className="order-2 lg:order-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/58">Offer Price</p>
+                    <div className="mt-2 flex flex-wrap items-end gap-4">
+                      <p className="font-display text-4xl font-semibold text-amber-200 sm:text-5xl lg:text-[4rem]">
+                        {featuredBook ? (Number(featuredBook.price) === 0 ? 'Free' : `Rs ${featuredBook.price}`) : 'Coming Soon'}
+                      </p>
+                      {featuredMetadata.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pb-1">
+                          {featuredMetadata.map((chip) => (
+                            <span
+                              key={`featured-${chip}`}
+                              className="rounded-full border border-amber-200/20 bg-[#1a1207]/55 px-3 py-1.5 text-[11px] font-semibold text-amber-100/88"
+                            >
+                              {chip}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {featuredBook && <p className="mt-3 max-w-md text-xs text-amber-100/72">{featuredTrust}</p>}
+                  </div>
+
+                  <div className="order-1 flex flex-col items-center justify-center gap-3 lg:order-2">
+                    <button
+                      type="button"
+                      onClick={() => featuredBook && toggleSaveOffer(featuredBook.id)}
+                      className="book-stage__cta inline-flex min-w-[220px] items-center justify-center gap-2 rounded-[1.05rem] px-6 py-3.5 text-sm font-bold text-[#1e1606] transition hover:brightness-105"
+                    >
+                      <ShoppingBag className={`h-4 w-4 ${featuredSaved ? 'fill-current' : ''}`} />
+                      {featuredSaved ? 'Offer Saved' : 'Save Offer'}
+                    </button>
+                    {featuredConnectLink && (
+                      <a
+                        href={featuredConnectLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-amber-200/30 px-5 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
+                      >
+                        Connect
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="order-3 flex items-center justify-between gap-4 lg:justify-end">
+                    <div className="text-right">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/52">Live books</p>
+                      <p className="mt-1 text-sm font-semibold text-amber-50/82">{featuredCountLabel}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => shiftFeaturedBook(-1)}
+                        disabled={bookNotices.length <= 1}
+                        className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-200/28 bg-[#120c05]/58 text-amber-100 transition hover:border-amber-200/48 hover:bg-[#1e1408]/85 disabled:cursor-not-allowed disabled:opacity-45"
+                        aria-label="Previous book"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => shiftFeaturedBook(1)}
+                        disabled={bookNotices.length <= 1}
+                        className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-200/28 bg-[#120c05]/58 text-amber-100 transition hover:border-amber-200/48 hover:bg-[#1e1408]/85 disabled:cursor-not-allowed disabled:opacity-45"
+                        aria-label="Next book"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_160px_170px_auto_auto]">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search title, school, category, note, keyword"
-                className="w-full rounded-xl border border-amber-200/20 bg-[#171106]/80 px-4 py-2.5 text-sm text-amber-50 placeholder:text-amber-100/40 outline-none focus:border-amber-200/45"
-              />
-              <select
-                value={recencyFilter}
-                onChange={(e) => setRecencyFilter(e.target.value)}
-                className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
-              >
-                {recencyOptions.map((option) => (
-                  <option key={option.value} value={option.value} className="bg-[#171106]">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={colonyFilter}
-                onChange={(e) => setColonyFilter(e.target.value)}
-                className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
-              >
-                {colonyOptions.map((option) => (
-                  <option key={option.value} value={option.value} className="bg-[#171106]">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setShowSold((prev) => !prev)}
-                className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${
-                  showSold
-                    ? 'border-amber-200/45 bg-amber-200/15 text-amber-100'
-                    : 'border-amber-200/25 bg-[#171106]/75 text-amber-100/75 hover:bg-[#211608]/85'
-                }`}
-              >
-                {showSold ? 'Hide sold' : 'Show sold'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setRecencyFilter('all');
-                  setColonyFilter('all');
-                  setCategoryFilter('All');
-                  setSchoolFilter('');
-                }}
-                className="rounded-xl border border-amber-200/25 bg-[#171106]/75 px-4 py-2.5 text-sm font-semibold text-amber-100/85 transition hover:bg-[#211608]/85"
-              >
-                Clear
-              </button>
-            </div>
           </div>
         </section>
+        <section className="surface-panel mt-4 rounded-[1.6rem] p-4 sm:p-5">
+          <div className="hide-scrollbar mb-3 flex gap-2 overflow-x-auto pb-1">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                  categoryFilter === cat
+                    ? 'bg-amber-200 text-[#382607] shadow-[0_12px_30px_-16px_rgba(212,175,55,0.95)]'
+                    : 'border border-amber-200/20 bg-[#1a1207]/70 text-amber-100/82 hover:bg-[#281b0a]/85'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_160px_170px_auto_auto]">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search title, school, category, note, keyword"
+              className="w-full rounded-xl border border-amber-200/20 bg-[#171106]/80 px-4 py-2.5 text-sm text-amber-50 placeholder:text-amber-100/40 outline-none focus:border-amber-200/45"
+            />
+            <select
+              value={recencyFilter}
+              onChange={(e) => setRecencyFilter(e.target.value)}
+              className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+            >
+              {recencyOptions.map((option) => (
+                <option key={option.value} value={option.value} className="bg-[#171106]">
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={colonyFilter}
+              onChange={(e) => setColonyFilter(e.target.value)}
+              className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+            >
+              {colonyOptions.map((option) => (
+                <option key={option.value} value={option.value} className="bg-[#171106]">
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowSold((prev) => !prev)}
+              className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${
+                showSold
+                  ? 'border-amber-200/45 bg-amber-200/15 text-amber-100'
+                  : 'border-amber-200/25 bg-[#171106]/75 text-amber-100/75 hover:bg-[#211608]/85'
+              }`}
+            >
+              {showSold ? 'Hide sold' : 'Show sold'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setRecencyFilter('all');
+                setColonyFilter('all');
+                setCategoryFilter('All');
+                setSchoolFilter('');
+              }}
+              className="rounded-xl border border-amber-200/25 bg-[#171106]/75 px-4 py-2.5 text-sm font-semibold text-amber-100/85 transition hover:bg-[#211608]/85"
+            >
+              Clear
+            </button>
+          </div>
+        </section>
+        </>
       ) : (
         <section className="glass-panel relative overflow-hidden rounded-[1.8rem] p-5 sm:p-6">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_50%_0%,rgba(238,200,103,0.26),transparent_72%)]" />
@@ -618,6 +695,7 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
             const statusMeta = getStatusMeta(status);
             const metadataChips = getMetadataChips(notice);
             const trustLine = sanitizeTrustLine(getTrustLine(notice));
+            const connectLink = generateWhatsAppLink(notice.sellerPhone || '', notice.title, notice.school, 'EN', notice.successNote);
 
             return (
               <article
@@ -711,14 +789,16 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                   >
                     <Share2 className="h-4 w-4" />
                   </button>
-                  <a
-                    href={generateWhatsAppLink(notice.sellerPhone || '', notice.title, notice.school, 'EN', notice.successNote)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full bg-amber-200 px-3.5 py-1.5 text-xs font-bold text-[#382707] transition hover:brightness-105"
-                  >
-                    Connect
-                  </a>
+                  {connectLink && (
+                    <a
+                      href={connectLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full bg-amber-200 px-3.5 py-1.5 text-xs font-bold text-[#382707] transition hover:brightness-105"
+                    >
+                      Connect
+                    </a>
+                  )}
                 </div>
               </div>
             </article>

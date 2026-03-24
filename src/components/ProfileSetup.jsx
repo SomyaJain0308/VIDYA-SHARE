@@ -10,6 +10,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
   const [name, setName] = useState('');
   const [school, setSchool] = useState('');
   const [colony, setColony] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
   const [classFocus, setClassFocus] = useState('');
   const [preferredMeetup, setPreferredMeetup] = useState('');
   const [availability, setAvailability] = useState('');
@@ -17,11 +18,13 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
   const [showPhoneOnProfile, setShowPhoneOnProfile] = useState(false);
   const [publicProfile, setPublicProfile] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     setName(initialProfile?.displayName || '');
     setSchool(initialProfile?.primarySchool || '');
     setColony(initialProfile?.colony || '');
+    setContactPhone((initialProfile?.contactPhone || initialProfile?.phone || auth.currentUser?.phoneNumber || '').replace(/\D/g, '').slice(-10));
     setClassFocus(initialProfile?.classFocus || '');
     setPreferredMeetup(initialProfile?.preferredMeetup || '');
     setAvailability(initialProfile?.availability || '');
@@ -34,9 +37,16 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     e.preventDefault();
     const cleanName = name.trim();
     if (!cleanName || !auth.currentUser) return;
+    const normalizedContactPhone = contactPhone.replace(/\D/g, '').slice(-10);
+    if (contactPhone && normalizedContactPhone.length !== 10) {
+      setSubmitError('Contact phone must be a valid 10-digit number.');
+      return;
+    }
 
     const profileValues = {
-      phone: auth.currentUser.phoneNumber || '',
+      phone: normalizedContactPhone || auth.currentUser.phoneNumber || '',
+      contactPhone: normalizedContactPhone,
+      email: auth.currentUser.email || '',
       displayName: cleanName,
       primarySchool: normalizeSchoolInput(school),
       colony: colony.trim(),
@@ -51,6 +61,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     };
 
     setIsLoading(true);
+    setSubmitError('');
     try {
       const payload = {
         ...profileValues,
@@ -69,6 +80,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
       });
     } catch (error) {
       console.error('Error saving profile', error);
+      setSubmitError('Could not save your profile right now. Please try again.');
       setIsLoading(false);
     }
   };
@@ -122,6 +134,14 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
             value={colony}
             onChange={(e) => setColony(e.target.value)}
+          />
+
+          <input
+            type="tel"
+            placeholder="WhatsApp / Contact Number (Optional)"
+            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
+            value={contactPhone}
+            onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
           />
 
           <SchoolSearchInput
@@ -200,6 +220,11 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
             </>
           )}
         </button>
+        {submitError && (
+          <p className="mt-3 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">
+            {submitError}
+          </p>
+        )}
       </motion.form>
     </div>
   );

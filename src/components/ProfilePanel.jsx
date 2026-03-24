@@ -7,6 +7,7 @@ export default function ProfilePanel({
   isAuthenticated,
   userProfile,
   userPhone,
+  userEmail,
   onOpenAuth,
   onOpenPostFlow,
   onOpenRequests,
@@ -48,7 +49,8 @@ export default function ProfilePanel({
           </div>
           <p className="text-sm font-semibold text-amber-50">{userProfile?.primarySchool || 'School not set'}</p>
           <p className="mt-1 text-xs text-amber-100/65">{userProfile?.colony || 'Colony not set'}</p>
-          <p className="mt-1 text-xs text-amber-100/65">{userPhone || 'Phone not available'}</p>
+          <p className="mt-1 text-xs text-amber-100/65">{userProfile?.contactPhone || userPhone || 'Phone not available'}</p>
+          <p className="mt-1 text-xs text-amber-100/65">{userProfile?.email || userEmail || 'Email not available'}</p>
           {userProfile?.classFocus && <p className="mt-2 text-xs text-amber-100/75">Classes: {userProfile.classFocus}</p>}
           {userProfile?.preferredMeetup && (
             <p className="mt-1 text-xs text-amber-100/75">Handover: {userProfile.preferredMeetup}</p>

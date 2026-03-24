@@ -6,12 +6,13 @@ import RequestBoard from './RequestBoard';
 import { sendLocalNotification } from '../utils/notifications';
 import { normalizeText, extractKeywords, isLikelyMatch } from '../utils/matching';
 
-export default function Requests({ onRequireAuth }) {
+export default function Requests({ userProfile, onRequireAuth }) {
   const [requests, setRequests] = useState([]);
   const [newRequest, setNewRequest] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [recencyFilter, setRecencyFilter] = useState('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const requesterContactPhone = userProfile?.contactPhone || userProfile?.phone || auth.currentUser?.phoneNumber || '';
 
   const getRecencyCutoffMs = (value) => {
     const now = Date.now();
@@ -86,7 +87,7 @@ export default function Requests({ onRequireAuth }) {
         normalizedText: normalizeText(trimmedRequest),
         keywords: requestKeywords,
         requesterId: auth.currentUser.uid,
-        requesterPhone: auth.currentUser.phoneNumber,
+        requesterPhone: requesterContactPhone,
         createdAt: serverTimestamp(),
       });
       await pingPotentialSellers({

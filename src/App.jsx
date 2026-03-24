@@ -30,6 +30,7 @@ export default function App() {
   const deliveredAlertsRef = useRef(new Set());
   const currentUserUid = auth.currentUser?.uid || '';
   const currentUserPhone = auth.currentUser?.phoneNumber || '';
+  const currentUserEmail = auth.currentUser?.email || '';
   const ADMIN_NUMBER = (import.meta.env.VITE_ADMIN_PHONE || '').replace(/\D/g, '');
   const normalizedCurrentPhone = currentUserPhone.replace(/\D/g, '');
   const isAdmin = !!auth.currentUser && ((ADMIN_NUMBER && normalizedCurrentPhone === ADMIN_NUMBER) || userProfile?.isAdmin === true);
@@ -97,7 +98,14 @@ export default function App() {
             return null;
           });
         } else {
-          setUserProfile({ displayName: user.displayName || 'Parent', primarySchool: user.school || '', publicProfile: true });
+          setUserProfile({
+            displayName: user.displayName || 'Parent',
+            primarySchool: user.school || '',
+            publicProfile: true,
+            email: user.email || '',
+            phone: user.phoneNumber || '',
+            contactPhone: user.phoneNumber || '',
+          });
           setShowProfileSetup(true);
         }
       } catch (error) {
@@ -307,7 +315,7 @@ export default function App() {
                     onConnectClick={(itemId) => handleProtectedAction(() => console.log('Connecting to item', itemId))}
                   />
                 )}
-                {activeTab === 'requests' && <Requests onRequireAuth={() => setShowAuthModal(true)} />}
+                {activeTab === 'requests' && <Requests userProfile={userProfile} onRequireAuth={() => setShowAuthModal(true)} />}
                 {activeTab === 'profile' && <MyPosts />}
                 {activeTab === 'admin' && <Admin isAdmin={isAdmin} />}
               </main>
@@ -359,6 +367,7 @@ export default function App() {
           isAuthenticated={isAuthenticated || !!auth.currentUser}
           userProfile={userProfile}
           userPhone={currentUserPhone}
+          userEmail={currentUserEmail}
           isAdmin={isAdmin}
           onOpenAuth={() => {
             setIsProfilePanelOpen(false);

@@ -34,6 +34,7 @@ export default function PostFlow({ userProfile, onSuccess }) {
   const isUniformCategory = formData.category === 'Uniforms';
   const isBookCategory = formData.category === 'Books';
   const conditionOptions = ['Like New', 'Good', 'Fair', 'Needs Repair'];
+  const sellerContactPhone = userProfile?.contactPhone || userProfile?.phone || auth.currentUser?.phoneNumber || '';
 
   const handleImageChange = (e) => {
     const selected = e.target.files[0];
@@ -131,6 +132,10 @@ export default function PostFlow({ userProfile, onSuccess }) {
       setSubmitError('Please complete title and category. School is required for uniform listings.');
       return;
     }
+    if (!sellerContactPhone) {
+      setSubmitError('Add a contact number in your profile before posting so buyers can reach you.');
+      return;
+    }
     if (!file) {
       setSubmitError('Please add a product photo before posting.');
       return;
@@ -189,7 +194,7 @@ export default function PostFlow({ userProfile, onSuccess }) {
             sellerSchool: userProfile?.primarySchool || '',
             photoUrl: downloadURL,
             sellerId: auth.currentUser.uid,
-            sellerPhone: auth.currentUser.phoneNumber,
+            sellerPhone: sellerContactPhone,
             status: 'active',
             createdAt: serverTimestamp(),
           });
