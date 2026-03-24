@@ -260,6 +260,73 @@
     min-height: 14.5rem;
   }
 
+  .book-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 58% 48%, rgba(255, 232, 167, 0.14), transparent 18%),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 24%, transparent 76%, rgba(255, 255, 255, 0.03));
+    pointer-events: none;
+  }
+
+  .book-stage__ghost {
+    text-shadow: 0 0 40px rgba(255, 255, 255, 0.04);
+  }
+
+  .book-hero {
+    perspective: 1800px;
+    transform-style: preserve-3d;
+  }
+
+  .book-hero__core {
+    transform-style: preserve-3d;
+    animation: book-float 6.8s ease-in-out infinite;
+  }
+
+  .book-hero__cover {
+    transform: rotateY(-26deg) rotateX(8deg) rotateZ(-7deg);
+    transform-origin: center center;
+  }
+
+  .book-hero__pages {
+    transform: rotateY(-26deg) rotateX(8deg) rotateZ(-7deg) translateZ(-1px);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .book-hero__trail {
+    transform-origin: center center;
+    filter: blur(1px);
+  }
+
+  .book-hero__trail--1 {
+    transform: translate3d(34px, -10px, -40px) rotateY(-22deg) rotateZ(-6deg) scale(0.95);
+    opacity: 0.2;
+  }
+
+  .book-hero__trail--2 {
+    transform: translate3d(68px, -22px, -80px) rotateY(-26deg) rotateZ(-7deg) scale(0.9);
+    opacity: 0.14;
+    filter: blur(2px);
+  }
+
+  .book-hero__trail--3 {
+    transform: translate3d(100px, -34px, -120px) rotateY(-30deg) rotateZ(-8deg) scale(0.85);
+    opacity: 0.09;
+    filter: blur(3px);
+  }
+
+  @keyframes book-float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+
+    50% {
+      transform: translate3d(0, -14px, 0);
+    }
+  }
+
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }

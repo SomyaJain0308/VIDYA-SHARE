@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, Bookmark, BookOpen } from 'lucide-react';
+import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, BookOpen } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateWhatsAppLink } from '../utils/whatsapp';
@@ -193,6 +193,11 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
   };
 
   const sanitizeTrustLine = (value) => (value || '').replaceAll('â€¢', '|').replaceAll('•', '|');
+  const buildGhostWord = (value) => {
+    const clean = (value || 'BOOKS').replace(/[^a-z0-9 ]/gi, ' ').trim();
+    const firstWord = clean.split(/\s+/)[0] || 'BOOKS';
+    return firstWord.toUpperCase().slice(0, 10);
+  };
   const normalizedUserSchool = normalizeSchoolInput(userProfile?.primarySchool || '');
   const normalizedUserColony = normalizeText(userProfile?.colony);
   const searchTerm = normalizeText(searchQuery).trim();
@@ -252,6 +257,7 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
   const featuredMetadata = featuredBook ? getMetadataChips(featuredBook) : [];
   const featuredTrust = featuredBook ? sanitizeTrustLine(getTrustLine(featuredBook)) : '';
   const featuredSaved = featuredBook ? savedOffers.includes(featuredBook.id) : false;
+  const featuredGhostWord = buildGhostWord(featuredBook?.title || 'Books');
 
   return (
     <div className="market-feed mx-auto w-full max-w-[1400px] pb-14 pt-2">
@@ -286,97 +292,132 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
               ))}
             </div>
 
-            <div className="grid gap-5 rounded-[1.6rem] border border-amber-200/25 bg-[#110c05]/45 p-4 sm:p-5 lg:grid-cols-[1.15fr_1fr]">
-              <div className="order-2 flex flex-col justify-center lg:order-1">
-                {featuredBook ? (
-                  <>
+            <div className="book-stage relative overflow-hidden rounded-[1.8rem] border border-amber-200/20 bg-[#090603]/35 px-4 py-5 sm:px-6 sm:py-6">
+              <div className="book-stage__grid grid min-h-[560px] gap-6 lg:grid-cols-[0.95fr_1.2fr]">
+                <div className="relative z-20 order-2 flex flex-col justify-between lg:order-1">
+                  <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">Featured Book</p>
-                    <h3 className="font-display mt-1 text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl">{featuredBook.title}</h3>
-                    <p className="mt-2 text-sm text-amber-100/78">
-                      {featuredBook.successNote || 'Trusted student listing with quick neighborhood handover support.'}
-                    </p>
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-amber-200 px-4 py-1.5 text-sm font-bold text-[#382707]">
-                        {Number(featuredBook.price) === 0 ? 'Gifted Item' : `Rs ${featuredBook.price}`}
-                      </span>
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${featuredStatusMeta.badgeClass}`}>{featuredStatusMeta.label}</span>
-                      <span className="rounded-full border border-amber-200/25 bg-[#1a1207]/70 px-3 py-1 text-xs font-semibold text-amber-100/85">
-                        {timeAgo(featuredBook.createdAt)}
-                      </span>
-                    </div>
-                    {featuredMetadata.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-1.5">
-                        {featuredMetadata.map((chip) => (
-                          <span
-                            key={`featured-${chip}`}
-                            className="rounded-full border border-amber-200/25 bg-[#1a1207]/80 px-2.5 py-1 text-[11px] font-semibold text-amber-100/88"
-                          >
-                            {chip}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <p className="mt-3 truncate text-xs text-amber-100/72">{featuredTrust}</p>
-                    <div className="mt-5 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleSaveOffer(featuredBook.id)}
-                        className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-sm font-bold text-[#322206] transition hover:brightness-105"
-                      >
-                        <Bookmark className={`h-4 w-4 ${featuredSaved ? 'fill-current' : ''}`} />
-                        {featuredSaved ? 'Saved Offer' : 'Save Offer'}
-                      </button>
-                      <a
-                        href={generateWhatsAppLink(
-                          featuredBook.sellerPhone || '',
-                          featuredBook.title,
-                          featuredBook.school,
-                          'EN',
-                          featuredBook.successNote
+                    {featuredBook ? (
+                      <>
+                        <h3 className="font-display mt-2 max-w-xl text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl lg:text-[3.4rem]">
+                          {featuredBook.title}
+                        </h3>
+                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-amber-100/78 sm:text-base">
+                          {featuredBook.successNote || 'Trusted student listing with quick neighborhood handover support.'}
+                        </p>
+                        {featuredMetadata.length > 0 && (
+                          <div className="mt-5 flex max-w-lg flex-wrap gap-2">
+                            {featuredMetadata.map((chip) => (
+                              <span
+                                key={`featured-${chip}`}
+                                className="rounded-full border border-amber-200/25 bg-[#1a1207]/80 px-3 py-1.5 text-[11px] font-semibold text-amber-100/88"
+                              >
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full border border-amber-200/35 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
-                      >
-                        Connect
-                      </a>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">Featured Book</p>
-                    <h3 className="font-display mt-1 text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl">New semester favorites loading soon</h3>
-                    <p className="mt-2 text-sm text-amber-100/78">
-                      Keep your library-inspired feed ready. The first verified book offer will appear here as a spotlight deal.
-                    </p>
-                    <div className="mt-5">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-sm font-bold text-[#322206] transition hover:brightness-105"
-                      >
-                        <Bookmark className="h-4 w-4" />
-                        Save Offer
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="order-1 flex items-center justify-center py-2 lg:order-2">
-                <div className="relative h-[300px] w-[220px] sm:h-[340px] sm:w-[250px]">
-                  <div className="absolute inset-0 translate-x-6 translate-y-6 rotate-[8deg] rounded-[1.5rem] border border-amber-200/25 bg-[#2d1e09]/40 shadow-[0_24px_40px_-28px_rgba(0,0,0,0.9)]" />
-                  <div className="absolute inset-0 -translate-x-4 translate-y-3 -rotate-[7deg] rounded-[1.5rem] border border-amber-200/20 bg-[#100a04]/75" />
-                  <div className="relative h-full w-full overflow-hidden rounded-[1.6rem] border border-amber-100/30 bg-[#120d06] shadow-[0_30px_50px_-30px_rgba(0,0,0,0.95)]">
-                    {featuredBook?.photoUrl ? (
-                      <img src={featuredBook.photoUrl} alt={featuredBook.title} className="h-full w-full object-cover" />
+                      </>
                     ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#221708] via-[#181005] to-[#100902] text-amber-100/75">
-                        <BookOpen className="mb-3 h-12 w-12" />
-                        <p className="px-5 text-center text-sm font-semibold">
-                          {featuredBook ? 'Cover image will appear here' : 'Your next great book deal'}
+                      <>
+                        <h3 className="font-display mt-2 max-w-xl text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl lg:text-[3.4rem]">
+                          New semester favorites loading soon
+                        </h3>
+                        <p className="mt-3 max-w-lg text-sm leading-relaxed text-amber-100/78 sm:text-base">
+                          Keep your library-inspired feed ready. The first verified book offer will appear here as a spotlight deal.
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="mt-8 flex flex-col gap-5">
+                    <div className="flex flex-wrap items-end gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/55">Offer Price</p>
+                        <p className="font-display mt-1 text-4xl font-semibold text-amber-200 sm:text-5xl">
+                          {featuredBook ? (Number(featuredBook.price) === 0 ? 'Free' : `Rs ${featuredBook.price}`) : 'Coming Soon'}
                         </p>
                       </div>
-                    )}
+                      {featuredBook && (
+                        <>
+                          <span className={`rounded-full px-3 py-1 text-xs font-bold ${featuredStatusMeta.badgeClass}`}>{featuredStatusMeta.label}</span>
+                          <span className="rounded-full border border-amber-200/25 bg-[#1a1207]/70 px-3 py-1 text-xs font-semibold text-amber-100/85">
+                            {timeAgo(featuredBook.createdAt)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => featuredBook && toggleSaveOffer(featuredBook.id)}
+                        className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-6 py-3 text-sm font-bold text-[#322206] shadow-[0_18px_35px_-18px_rgba(212,175,55,0.9)] transition hover:brightness-105"
+                      >
+                        <ShoppingBag className={`h-4 w-4 ${featuredSaved ? 'fill-current' : ''}`} />
+                        {featuredSaved ? 'Offer Saved' : 'Save Offer'}
+                      </button>
+                      {featuredBook && (
+                        <a
+                          href={generateWhatsAppLink(
+                            featuredBook.sellerPhone || '',
+                            featuredBook.title,
+                            featuredBook.school,
+                            'EN',
+                            featuredBook.successNote
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-amber-200/35 px-5 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
+                        >
+                          Connect
+                        </a>
+                      )}
+                    </div>
+
+                    {featuredBook && <p className="truncate text-xs text-amber-100/72">{featuredTrust}</p>}
+                  </div>
+                </div>
+
+                <div className="relative order-1 flex min-h-[320px] items-center justify-center lg:order-2 lg:min-h-[520px]">
+                  <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden">
+                    <div className="book-stage__ghost text-center font-[Sora] text-[5.25rem] font-extrabold uppercase leading-none tracking-[-0.08em] text-white/18 sm:text-[7rem] lg:text-[10rem]">
+                      {featuredGhostWord}
+                    </div>
+                  </div>
+
+                  <div className="book-hero relative h-[340px] w-[250px] sm:h-[420px] sm:w-[300px]">
+                    {[3, 2, 1].map((trail) => (
+                      <div
+                        key={trail}
+                        className={`book-hero__trail book-hero__trail--${trail} absolute inset-0 overflow-hidden rounded-[1.8rem] border border-amber-100/10 bg-[#1a1207]/10`}
+                      >
+                        {featuredBook?.photoUrl && (
+                          <img src={featuredBook.photoUrl} alt="" aria-hidden="true" className="h-full w-full object-cover" />
+                        )}
+                      </div>
+                    ))}
+
+                    <div className="book-hero__shadow absolute inset-x-[12%] bottom-2 h-10 rounded-full bg-black/60 blur-2xl" />
+                    <div className="book-hero__core absolute inset-0">
+                      <div className="book-hero__pages absolute right-[-10px] top-[16px] h-[88%] w-5 rounded-r-[1rem] bg-gradient-to-b from-[#f6e8be] via-[#e3cf9a] to-[#8d6d2a]" />
+                      <div className="book-hero__cover absolute inset-0 overflow-hidden rounded-[1.8rem] border border-amber-100/30 bg-[#120d06] shadow-[0_35px_70px_-28px_rgba(0,0,0,0.95)]">
+                        {featuredBook?.photoUrl ? (
+                          <>
+                            <img src={featuredBook.photoUrl} alt={featuredBook.title} className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.28),transparent_20%,transparent_55%,rgba(0,0,0,0.2))]" />
+                            <div className="absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/30 to-transparent" />
+                          </>
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#221708] via-[#181005] to-[#100902] text-amber-100/75">
+                            <BookOpen className="mb-4 h-14 w-14" />
+                            <p className="px-8 text-center text-base font-semibold">
+                              {featuredBook ? 'Cover image will appear here' : 'Your next great book deal'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
