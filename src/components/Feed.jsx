@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X } from 'lucide-react';
+import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, Bookmark, BookOpen } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateWhatsAppLink } from '../utils/whatsapp';
@@ -25,6 +25,7 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
   const [colonyFilter, setColonyFilter] = useState('all');
   const [showSold, setShowSold] = useState(false);
   const [reportedItems, setReportedItems] = useState([]);
+  const [savedOffers, setSavedOffers] = useState([]);
   const [sellerProfiles, setSellerProfiles] = useState({});
   const [activeProfile, setActiveProfile] = useState(null);
 
@@ -138,6 +139,10 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
     });
   };
 
+  const toggleSaveOffer = (noticeId) => {
+    setSavedOffers((prev) => (prev.includes(noticeId) ? prev.filter((id) => id !== noticeId) : [...prev, noticeId]));
+  };
+
   const getStatusMeta = (status) => {
     if (status === 'sold') return { label: 'Sold', badgeClass: 'bg-rose-300/90 text-[#4a1b25]' };
     if (status === 'reserved') return { label: 'Reserved', badgeClass: 'bg-amber-200 text-[#3f2a02]' };
@@ -241,41 +246,232 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
       return timeB - timeA;
     });
 
+  const isBooksShowcase = categoryFilter !== 'Uniforms';
+  const featuredBook = processedNotices.find((notice) => notice.category === 'Books') || null;
+  const featuredStatusMeta = getStatusMeta(featuredBook?.status || 'active');
+  const featuredMetadata = featuredBook ? getMetadataChips(featuredBook) : [];
+  const featuredTrust = featuredBook ? sanitizeTrustLine(getTrustLine(featuredBook)) : '';
+  const featuredSaved = featuredBook ? savedOffers.includes(featuredBook.id) : false;
+
   return (
     <div className="market-feed mx-auto w-full max-w-[1400px] pb-14 pt-2">
-      <section className="glass-panel relative overflow-hidden rounded-[1.8rem] p-5 sm:p-6">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_50%_0%,rgba(238,200,103,0.26),transparent_72%)]" />
-        <div className="relative z-10">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold tracking-[0.2em] text-amber-200/75 uppercase">Live Listings</p>
-              <h2 className="font-display text-xl font-semibold text-amber-50 sm:text-2xl">Explore Nearby Items</h2>
+      {isBooksShowcase ? (
+        <section className="relative overflow-hidden rounded-[2rem] border border-amber-200/20 bg-gradient-to-b from-[#160f06]/70 via-[#0f0a04]/55 to-[#090603]/30 p-5 backdrop-blur-[2px] sm:p-6">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_8%,rgba(239,198,88,0.24),transparent_48%),radial-gradient(circle_at_80%_10%,rgba(255,255,255,0.1),transparent_38%)]" />
+          <div className="relative z-10">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/72">Book Spotlight</p>
+                <h2 className="font-display text-2xl font-semibold text-amber-50 sm:text-3xl">Library Picks, First Deal Featured</h2>
+              </div>
+              <div className="hidden items-center gap-2 rounded-full border border-amber-200/30 bg-amber-200/10 px-3 py-1 text-xs font-semibold text-amber-100 md:flex">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Verified community
+              </div>
             </div>
-            <div className="hidden items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1 text-xs font-semibold text-amber-100 md:flex">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Verified community
-            </div>
-          </div>
 
-          <div className="hide-scrollbar mb-3 flex gap-2 overflow-x-auto pb-1">
-            {categories.map((cat) => (
+            <div className="hide-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                    categoryFilter === cat
+                      ? 'bg-amber-200 text-[#382607] shadow-[0_12px_30px_-16px_rgba(212,175,55,0.95)]'
+                      : 'border border-amber-200/20 bg-[#1a1207]/70 text-amber-100/82 hover:bg-[#281b0a]/85'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-5 rounded-[1.6rem] border border-amber-200/25 bg-[#110c05]/45 p-4 sm:p-5 lg:grid-cols-[1.15fr_1fr]">
+              <div className="order-2 flex flex-col justify-center lg:order-1">
+                {featuredBook ? (
+                  <>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">Featured Book</p>
+                    <h3 className="font-display mt-1 text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl">{featuredBook.title}</h3>
+                    <p className="mt-2 text-sm text-amber-100/78">
+                      {featuredBook.successNote || 'Trusted student listing with quick neighborhood handover support.'}
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-amber-200 px-4 py-1.5 text-sm font-bold text-[#382707]">
+                        {Number(featuredBook.price) === 0 ? 'Gifted Item' : `Rs ${featuredBook.price}`}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${featuredStatusMeta.badgeClass}`}>{featuredStatusMeta.label}</span>
+                      <span className="rounded-full border border-amber-200/25 bg-[#1a1207]/70 px-3 py-1 text-xs font-semibold text-amber-100/85">
+                        {timeAgo(featuredBook.createdAt)}
+                      </span>
+                    </div>
+                    {featuredMetadata.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {featuredMetadata.map((chip) => (
+                          <span
+                            key={`featured-${chip}`}
+                            className="rounded-full border border-amber-200/25 bg-[#1a1207]/80 px-2.5 py-1 text-[11px] font-semibold text-amber-100/88"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="mt-3 truncate text-xs text-amber-100/72">{featuredTrust}</p>
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleSaveOffer(featuredBook.id)}
+                        className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-sm font-bold text-[#322206] transition hover:brightness-105"
+                      >
+                        <Bookmark className={`h-4 w-4 ${featuredSaved ? 'fill-current' : ''}`} />
+                        {featuredSaved ? 'Saved Offer' : 'Save Offer'}
+                      </button>
+                      <a
+                        href={generateWhatsAppLink(
+                          featuredBook.sellerPhone || '',
+                          featuredBook.title,
+                          featuredBook.school,
+                          'EN',
+                          featuredBook.successNote
+                        )}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-amber-200/35 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
+                      >
+                        Connect
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">Featured Book</p>
+                    <h3 className="font-display mt-1 text-3xl font-semibold leading-tight text-amber-50 sm:text-4xl">New semester favorites loading soon</h3>
+                    <p className="mt-2 text-sm text-amber-100/78">
+                      Keep your library-inspired feed ready. The first verified book offer will appear here as a spotlight deal.
+                    </p>
+                    <div className="mt-5">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-sm font-bold text-[#322206] transition hover:brightness-105"
+                      >
+                        <Bookmark className="h-4 w-4" />
+                        Save Offer
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="order-1 flex items-center justify-center py-2 lg:order-2">
+                <div className="relative h-[300px] w-[220px] sm:h-[340px] sm:w-[250px]">
+                  <div className="absolute inset-0 translate-x-6 translate-y-6 rotate-[8deg] rounded-[1.5rem] border border-amber-200/25 bg-[#2d1e09]/40 shadow-[0_24px_40px_-28px_rgba(0,0,0,0.9)]" />
+                  <div className="absolute inset-0 -translate-x-4 translate-y-3 -rotate-[7deg] rounded-[1.5rem] border border-amber-200/20 bg-[#100a04]/75" />
+                  <div className="relative h-full w-full overflow-hidden rounded-[1.6rem] border border-amber-100/30 bg-[#120d06] shadow-[0_30px_50px_-30px_rgba(0,0,0,0.95)]">
+                    {featuredBook?.photoUrl ? (
+                      <img src={featuredBook.photoUrl} alt={featuredBook.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#221708] via-[#181005] to-[#100902] text-amber-100/75">
+                        <BookOpen className="mb-3 h-12 w-12" />
+                        <p className="px-5 text-center text-sm font-semibold">
+                          {featuredBook ? 'Cover image will appear here' : 'Your next great book deal'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_160px_170px_auto_auto]">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search title, school, category, note, keyword"
+                className="w-full rounded-xl border border-amber-200/20 bg-[#171106]/80 px-4 py-2.5 text-sm text-amber-50 placeholder:text-amber-100/40 outline-none focus:border-amber-200/45"
+              />
+              <select
+                value={recencyFilter}
+                onChange={(e) => setRecencyFilter(e.target.value)}
+                className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+              >
+                {recencyOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-[#171106]">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={colonyFilter}
+                onChange={(e) => setColonyFilter(e.target.value)}
+                className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+              >
+                {colonyOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-[#171106]">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
               <button
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                  categoryFilter === cat
-                    ? 'bg-amber-200 text-[#382607] shadow-[0_10px_24px_-14px_rgba(212,175,55,0.95)]'
-                    : 'bg-[#1a1207] text-amber-100/80 hover:bg-[#281b0a]'
+                type="button"
+                onClick={() => setShowSold((prev) => !prev)}
+                className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${
+                  showSold
+                    ? 'border-amber-200/45 bg-amber-200/15 text-amber-100'
+                    : 'border-amber-200/25 bg-[#171106]/75 text-amber-100/75 hover:bg-[#211608]/85'
                 }`}
               >
-                {cat}
+                {showSold ? 'Hide sold' : 'Show sold'}
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setRecencyFilter('all');
+                  setColonyFilter('all');
+                  setCategoryFilter('All');
+                  setSchoolFilter('');
+                }}
+                className="rounded-xl border border-amber-200/25 bg-[#171106]/75 px-4 py-2.5 text-sm font-semibold text-amber-100/85 transition hover:bg-[#211608]/85"
+              >
+                Clear
+              </button>
+            </div>
           </div>
+        </section>
+      ) : (
+        <section className="glass-panel relative overflow-hidden rounded-[1.8rem] p-5 sm:p-6">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_50%_0%,rgba(238,200,103,0.26),transparent_72%)]" />
+          <div className="relative z-10">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold tracking-[0.2em] text-amber-200/75 uppercase">Live Listings</p>
+                <h2 className="font-display text-xl font-semibold text-amber-50 sm:text-2xl">Explore Nearby Items</h2>
+              </div>
+              <div className="hidden items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1 text-xs font-semibold text-amber-100 md:flex">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Verified community
+              </div>
+            </div>
 
-          <div className="grid gap-2 sm:grid-cols-1">
-            <div>
-              {categoryFilter === 'Uniforms' ? (
+            <div className="hide-scrollbar mb-3 flex gap-2 overflow-x-auto pb-1">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                    categoryFilter === cat
+                      ? 'bg-amber-200 text-[#382607] shadow-[0_10px_24px_-14px_rgba(212,175,55,0.95)]'
+                      : 'bg-[#1a1207] text-amber-100/80 hover:bg-[#281b0a]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-1">
+              <div>
                 <SchoolSearchInput
                   id="feed-uniform-school-filter"
                   value={schoolFilter}
@@ -284,75 +480,70 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                   placeholder="Search school for uniform listings"
                   helperText="Uniform search uses school matching."
                 />
-              ) : (
-                <div className="flex h-full min-h-[48px] items-center rounded-xl border border-amber-200/20 bg-[#171106] px-4 text-sm text-amber-100/65">
-                  <MapPin className="mr-2 h-4 w-4" />
-                  School filter appears in Uniforms section
-                </div>
-              )}
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_170px_auto]">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search title, school, category, note, keyword"
+                className="w-full rounded-xl border border-amber-200/20 bg-[#171106] px-4 py-2.5 text-sm text-amber-50 placeholder:text-amber-100/40 outline-none focus:border-amber-200/45"
+              />
+              <select
+                value={recencyFilter}
+                onChange={(e) => setRecencyFilter(e.target.value)}
+                className="rounded-xl border border-amber-200/20 bg-[#171106] px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+              >
+                {recencyOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-[#171106]">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={colonyFilter}
+                onChange={(e) => setColonyFilter(e.target.value)}
+                className="rounded-xl border border-amber-200/20 bg-[#171106] px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+              >
+                {colonyOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-[#171106]">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setRecencyFilter('all');
+                  setColonyFilter('all');
+                  setCategoryFilter('All');
+                  setSchoolFilter('');
+                }}
+                className="rounded-xl border border-amber-200/25 bg-[#171106] px-4 py-2.5 text-sm font-semibold text-amber-100/85 transition hover:bg-[#211608]"
+              >
+                Clear filters
+              </button>
+            </div>
+
+            <div className="mt-3 flex items-center">
+              <button
+                type="button"
+                onClick={() => setShowSold((prev) => !prev)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  showSold
+                    ? 'border-amber-200/40 bg-amber-200/15 text-amber-100'
+                    : 'border-amber-200/25 bg-[#171106] text-amber-100/75 hover:bg-[#211608]'
+                }`}
+              >
+                {showSold ? 'Hide sold' : 'Show sold'}
+              </button>
             </div>
           </div>
-
-          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_170px_auto]">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search title, school, category, note, keyword"
-              className="w-full rounded-xl border border-amber-200/20 bg-[#171106] px-4 py-2.5 text-sm text-amber-50 placeholder:text-amber-100/40 outline-none focus:border-amber-200/45"
-            />
-            <select
-              value={recencyFilter}
-              onChange={(e) => setRecencyFilter(e.target.value)}
-              className="rounded-xl border border-amber-200/20 bg-[#171106] px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
-            >
-              {recencyOptions.map((option) => (
-                <option key={option.value} value={option.value} className="bg-[#171106]">
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={colonyFilter}
-              onChange={(e) => setColonyFilter(e.target.value)}
-              className="rounded-xl border border-amber-200/20 bg-[#171106] px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
-            >
-              {colonyOptions.map((option) => (
-                <option key={option.value} value={option.value} className="bg-[#171106]">
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setRecencyFilter('all');
-                setColonyFilter('all');
-                setCategoryFilter('All');
-                setSchoolFilter('');
-              }}
-              className="rounded-xl border border-amber-200/25 bg-[#171106] px-4 py-2.5 text-sm font-semibold text-amber-100/85 transition hover:bg-[#211608]"
-            >
-              Clear filters
-            </button>
-          </div>
-
-          <div className="mt-3 flex items-center">
-            <button
-              type="button"
-              onClick={() => setShowSold((prev) => !prev)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                showSold
-                  ? 'border-amber-200/40 bg-amber-200/15 text-amber-100'
-                  : 'border-amber-200/25 bg-[#171106] text-amber-100/75 hover:bg-[#211608]'
-              }`}
-            >
-              {showSold ? 'Hide sold' : 'Show sold'}
-            </button>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {processedNotices.length === 0 ? (
