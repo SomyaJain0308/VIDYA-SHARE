@@ -1,0 +1,185 @@
+import React, { useEffect, useState } from 'react';
+import { collection, query, where, deleteDoc, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { Trash2, PackageOpen, Loader2, Award, ShieldCheck, Zap, Sparkles } from 'lucide-react';
+
+export default function MyPosts() {
+  const [myItems, setMyItems] = useState([]);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [statusSavingId, setStatusSavingId] = useState('');
+
+  useEffect(() => {
+    let unsubscribeItems = () => {};
+
+    const fetchDashboardData = async () => {
+      if (!auth.currentUser) {
+        setMyItems([]);
+        setUserProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) setUserProfile(userDoc.data());
+
+        const q = query(collection(db, 'notices'), where('sellerId', '==', auth.currentUser.uid));
+        unsubscribeItems = onSnapshot(
+          q,
+          (querySnapshot) => {
+            const items = [];
+            querySnapshot.forEach((entry) => items.push({ id: entry.id, ...entry.data() }));
+            setMyItems(items);
+            setLoading(false);
+          },
+          (error) => {
+            console.error('Error loading my items:', error);
+            setLoading(false);
+          }
+        );
+      } catch (error) {
+        console.error('Error fetching dashboard:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+    return () => unsubscribeItems();
+  }, []);
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Has this item been passed on?')) {
+      await deleteDoc(doc(db, 'notices', id));
+      setMyItems(myItems.filter((item) => item.id !== id));
+    }
+  };
+
+  const handleStatusChange = async (id, nextStatus) => {
+    try {
+      setStatusSavingId(id);
+      await updateDoc(doc(db, 'notices', id), { status: nextStatus });
+    } catch (error) {
+      console.error('Error updating item status:', error);
+      alert('Could not update status. Please try again.');
+    } finally {
+      setStatusSavingId('');
+    }
+  };
+
+  const getStatusMeta = (status) => {
+    if (status === 'sold') return { label: 'Sold', badgeClass: 'bg-rose-300/85 text-[#4a1b25]' };
+    if (status === 'reserved') return { label: 'Reserved', badgeClass: 'bg-amber-200 text-[#3f2a02]' };
+    return { label: 'Active', badgeClass: 'bg-emerald-200/90 text-[#153421]' };
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center p-14">
+        <Loader2 className="h-8 w-8 animate-spin text-amber-100" />
+      </div>
+    );
+  }
+
+  const karma = userProfile?.karmaPoints || 0;
+  const tier =
+    karma >= 100
+      ? { name: 'Community Pillar', color: 'bg-amber-200 text-[#3f2a02]', icon: <Award className="h-4 w-4" /> }
+      : karma >= 50
+        ? { name: 'Trusted Senior', color: 'bg-[#d7c9a3] text-[#2f2107]', icon: <ShieldCheck className="h-4 w-4" /> }
+        : { name: 'Neighborhood Helper', color: 'bg-[#c9b37c] text-[#332206]', icon: <Zap className="h-4 w-4" /> };
+
+  return (
+    <div className="mx-auto w-full max-w-4xl px-3 pb-14 pt-4 sm:px-6">
+      <section className="glass-panel relative mb-5 overflow-hidden rounded-[1.6rem] p-5 sm:p-6">
+        <div className="absolute right-0 top-0 p-6 opacity-20 sm:p-8">
+          <Award className="h-24 w-24 text-amber-100" />
+        </div>
+
+        <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-amber-100 uppercase">
+          <Sparkles className="h-3.5 w-3.5" />
+          Member Dashboard
+        </p>
+
+        <h2 className="font-display mb-1 text-2xl font-semibold text-amber-50">{userProfile?.displayName || 'Community Member'}</h2>
+        <div className={`mb-6 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${tier.color}`}>
+          {tier.icon} {tier.name}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-t border-amber-200/20 pt-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Karma Points</p>
+            <p className="font-display text-3xl font-semibold text-amber-100">{karma}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Items Shared</p>
+            <p className="font-display text-3xl font-semibold text-amber-50">{myItems.length}</p>
+          </div>
+        </div>
+      </section>
+
+      <h3 className="font-display mb-4 text-xl font-semibold text-amber-50">My Listings</h3>
+
+      {myItems.length === 0 ? (
+        <div className="glass-panel flex flex-col items-center justify-center rounded-3xl p-8">
+          <PackageOpen className="mb-3 h-12 w-12 text-amber-100/65" />
+          <p className="text-center text-sm text-amber-100/78">You have not posted any items yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {myItems.map((item) => {
+            const status = item.status || 'active';
+            const statusMeta = getStatusMeta(status);
+            const isSavingThis = statusSavingId === item.id;
+
+            return (
+              <article key={item.id} className="glass-panel mb-3 flex items-center justify-between rounded-2xl p-4">
+              <div className="flex items-center gap-4">
+                <img
+                  src={item.photoUrl || 'https://via.placeholder.com/50'}
+                  alt="item"
+                  className="h-14 w-14 rounded-xl bg-amber-100/20 object-cover"
+                />
+                <div>
+                  <h3 className="line-clamp-1 font-semibold text-amber-50">{item.title}</h3>
+                  <p className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusMeta.badgeClass}`}>
+                    {statusMeta.label}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={status}
+                  onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                  disabled={isSavingThis}
+                  className="rounded-xl border border-amber-200/30 bg-[#171106] px-3 py-2 text-xs font-semibold text-amber-100 outline-none transition focus:border-amber-200/60 disabled:opacity-60"
+                  aria-label={`Update status for ${item.title}`}
+                >
+                  <option className="text-slate-800" value="active">
+                    Active
+                  </option>
+                  <option className="text-slate-800" value="reserved">
+                    Reserved
+                  </option>
+                  <option className="text-slate-800" value="sold">
+                    Sold
+                  </option>
+                </select>
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  className="rounded-xl border border-rose-200/35 bg-transparent p-2.5 text-rose-200 transition hover:bg-rose-300/20"
+                  aria-label="Delete item"
+                  title="Delete permanently"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
