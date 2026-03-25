@@ -1,6 +1,6 @@
 {
-  "short_name": "VidyaShare",
-  "name": "Vidya Share: Community Exchange",
+  "short_name": "Vidya Share",
+  "name": "Vidya Share: Used Books Marketplace in Lucknow",
   "icons": [
     {
       "src": "icon.svg",
@@ -8,8 +8,9 @@
       "sizes": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#4f46e5",
-  "background_color": "#f8fafc"
+  "theme_color": "#0d1118",
+  "background_color": "#05070b"
 }

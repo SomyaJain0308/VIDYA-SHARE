@@ -25,6 +25,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth } from '../firebase';
+import { BrandMark } from './BrandLogo';
 
 const getSendOtpErrorMessage = (error) => {
   const code = error?.code || '';
@@ -336,21 +337,21 @@ export default function AuthModal({ onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-[220] flex flex-col justify-end sm:items-center sm:justify-center">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/75 backdrop-blur-lg" />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-[#02060c]/82 backdrop-blur-xl" />
 
       <motion.div
         initial={{ y: '100%', rotateX: 20 }}
         animate={{ y: 0, rotateX: 0 }}
         exit={{ y: '100%', rotateX: 20 }}
         transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-        className="glass-panel relative z-10 w-full max-w-lg overflow-hidden rounded-t-[2rem] p-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:rounded-[2rem] sm:p-8"
+        className="glass-panel relative z-10 w-full max-w-xl overflow-hidden rounded-t-[2rem] border border-cyan-300/16 bg-[#07111a]/96 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-[0_32px_100px_rgba(2,10,16,0.7)] sm:rounded-[2rem] sm:p-8"
       >
         <div className="absolute right-5 top-5 sm:right-6 sm:top-6">
           <motion.button
             whileHover={{ rotate: 90 }}
             whileTap={{ scale: 0.8 }}
             onClick={onClose}
-            className="rounded-full border border-amber-200/20 bg-[#1a1207] p-2.5 text-amber-100/85 transition-colors hover:text-amber-50"
+            className="rounded-full border border-cyan-300/20 bg-[#09131d]/92 p-2.5 text-cyan-50/80 transition-colors hover:border-cyan-300/38 hover:text-white"
           >
             <X className="h-5 w-5" />
           </motion.button>
@@ -367,19 +368,17 @@ export default function AuthModal({ onClose, onSuccess }) {
               exit={{ opacity: 0, y: -20 }}
               className="mt-4"
             >
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/30 bg-amber-200/10">
-                <ShieldCheck className="h-7 w-7 text-amber-100" />
-              </div>
-              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-amber-100/75 uppercase">Secure Access</p>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-amber-50 sm:text-[2rem]">Sign in your way</h2>
-              <p className="mb-8 text-sm text-amber-100/75">Use Google, email, or your phone number to enter Vidya Share securely.</p>
+              <BrandMark className="mb-6 h-14 w-14" />
+              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Secure Access</p>
+              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white sm:text-[2rem]">Sign in your way</h2>
+              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">Use Google, email, or your phone number to enter Vidya Share securely.</p>
 
               <div className="space-y-3">
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-amber-200/22 bg-[#171106] px-4 py-4 text-sm font-semibold text-amber-50 transition hover:border-amber-200/42 hover:bg-[#1d1507] disabled:cursor-not-allowed disabled:opacity-55"
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
                   Continue with Google
@@ -389,7 +388,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   type="button"
                   onClick={handleAppleSignIn}
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-amber-200/22 bg-[#171106] px-4 py-4 text-sm font-semibold text-amber-50 transition hover:border-amber-200/42 hover:bg-[#1d1507] disabled:cursor-not-allowed disabled:opacity-55"
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Apple className="h-5 w-5" />}
                   Continue with Apple
@@ -401,7 +400,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                     setErrorMessage('');
                     setView('EMAIL');
                   }}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-amber-200/22 bg-[#171106] px-4 py-4 text-sm font-semibold text-amber-50 transition hover:border-amber-200/42 hover:bg-[#1d1507]"
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721]"
                 >
                   <Mail className="h-5 w-5" />
                   Continue with Email
@@ -413,7 +412,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                     setErrorMessage('');
                     setView('PHONE');
                   }}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-amber-200/22 bg-[#171106] px-4 py-4 text-sm font-semibold text-amber-50 transition hover:border-amber-200/42 hover:bg-[#1d1507]"
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721]"
                 >
                   <Phone className="h-5 w-5" />
                   Continue with Phone OTP
@@ -436,26 +435,26 @@ export default function AuthModal({ onClose, onSuccess }) {
               <button
                 type="button"
                 onClick={goBackToChoice}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200/18 bg-[#171106] px-3 py-1.5 text-xs font-semibold text-amber-100/82 transition hover:border-amber-200/36 hover:text-amber-50"
+                className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-[#08111a]/90 px-3 py-1.5 text-xs font-semibold text-cyan-50/82 transition hover:border-cyan-300/36 hover:text-white"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back
               </button>
 
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/30 bg-amber-200/10">
-                <Mail className="h-7 w-7 text-amber-100" />
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/24 bg-cyan-300/10">
+                <Mail className="h-7 w-7 text-cyan-100" />
               </div>
-              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-amber-100/75 uppercase">Email Access</p>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-amber-50">
+              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Email Access</p>
+              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white">
                 {emailMode === 'signup' ? 'Create your email account' : 'Sign in with email'}
               </h2>
-              <p className="mb-6 text-sm text-amber-100/74">
+              <p className="mb-6 text-sm leading-relaxed text-cyan-50/72">
                 {emailMode === 'signup'
                   ? 'Create a Firebase email account for Vidya Share.'
                   : 'Use the email and password linked to your Vidya Share account.'}
               </p>
 
-              <div className="mb-6 flex rounded-2xl border border-amber-200/20 bg-[#140f05]/70 p-1">
+              <div className="mb-6 flex rounded-2xl border border-cyan-300/18 bg-[#08111a]/88 p-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -463,7 +462,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                     setErrorMessage('');
                   }}
                   className={`flex-1 rounded-[1rem] px-4 py-2.5 text-sm font-semibold transition ${
-                    emailMode === 'signin' ? 'bg-amber-300 text-[#2b1d06]' : 'text-amber-100/72'
+                    emailMode === 'signin' ? 'bg-cyan-300 text-[#06131d]' : 'text-cyan-50/68'
                   }`}
                 >
                   Sign in
@@ -475,7 +474,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                     setErrorMessage('');
                   }}
                   className={`flex-1 rounded-[1rem] px-4 py-2.5 text-sm font-semibold transition ${
-                    emailMode === 'signup' ? 'bg-amber-300 text-[#2b1d06]' : 'text-amber-100/72'
+                    emailMode === 'signup' ? 'bg-cyan-300 text-[#06131d]' : 'text-cyan-50/68'
                   }`}
                 >
                   Create account
@@ -485,12 +484,12 @@ export default function AuthModal({ onClose, onSuccess }) {
               <div className="space-y-3">
                 {emailMode === 'signup' && (
                   <div className="relative">
-                    <User2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-100/45" />
+                    <User2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                     <input
                       type="text"
                       placeholder="Your name"
                       autoFocus
-                      className="w-full rounded-2xl border border-amber-200/25 bg-[#171106] py-4 pl-11 pr-4 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                      className="lux-input w-full py-4 pl-11 pr-4 text-sm font-medium"
                       value={fullName}
                       onChange={(event) => setFullName(event.target.value)}
                     />
@@ -498,23 +497,23 @@ export default function AuthModal({ onClose, onSuccess }) {
                 )}
 
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-100/45" />
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                   <input
                     type="email"
                     placeholder="name@gmail.com"
                     autoFocus={emailMode !== 'signup'}
-                    className="w-full rounded-2xl border border-amber-200/25 bg-[#171106] py-4 pl-11 pr-4 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                    className="lux-input w-full py-4 pl-11 pr-4 text-sm font-medium"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                   />
                 </div>
 
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-100/45" />
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                   <input
                     type="password"
                     placeholder="Password"
-                    className="w-full rounded-2xl border border-amber-200/25 bg-[#171106] py-4 pl-11 pr-4 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                    className="lux-input w-full py-4 pl-11 pr-4 text-sm font-medium"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                   />
@@ -522,11 +521,11 @@ export default function AuthModal({ onClose, onSuccess }) {
 
                 {emailMode === 'signup' && (
                   <div className="relative">
-                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-100/45" />
+                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                     <input
                       type="password"
                       placeholder="Confirm password"
-                      className="w-full rounded-2xl border border-amber-200/25 bg-[#171106] py-4 pl-11 pr-4 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                      className="lux-input w-full py-4 pl-11 pr-4 text-sm font-medium"
                       value={confirmPassword}
                       onChange={(event) => setConfirmPassword(event.target.value)}
                     />
@@ -565,29 +564,29 @@ export default function AuthModal({ onClose, onSuccess }) {
               <button
                 type="button"
                 onClick={goBackToChoice}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200/18 bg-[#171106] px-3 py-1.5 text-xs font-semibold text-amber-100/82 transition hover:border-amber-200/36 hover:text-amber-50"
+                className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-[#08111a]/90 px-3 py-1.5 text-xs font-semibold text-cyan-50/82 transition hover:border-cyan-300/36 hover:text-white"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back
               </button>
 
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/30 bg-amber-200/10">
-                <ShieldCheck className="h-7 w-7 text-amber-100" />
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/24 bg-cyan-300/10">
+                <ShieldCheck className="h-7 w-7 text-cyan-100" />
               </div>
-              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-amber-100/75 uppercase">Phone Login</p>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-amber-50 sm:text-[2rem]">Secure phone login</h2>
-              <p className="mb-8 text-sm text-amber-100/75">Verify your number with OTP to join the local parent network.</p>
+              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Phone Login</p>
+              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white sm:text-[2rem]">Secure phone login</h2>
+              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">Verify your number with OTP to join the local parent network.</p>
 
               <div className="group relative mb-8 flex items-center">
-                <div className="absolute inset-y-0 left-0 flex items-center justify-center rounded-l-2xl border-r border-amber-200/25 bg-[#171106] pl-5 pr-3">
-                  <span className="text-base font-semibold text-amber-100">+91</span>
+                <div className="absolute inset-y-0 left-0 flex items-center justify-center rounded-l-2xl border-r border-cyan-300/18 bg-[#08111a] pl-5 pr-3">
+                  <span className="text-base font-semibold text-cyan-100">+91</span>
                 </div>
                 <input
                   type="tel"
                   maxLength="10"
                   autoFocus
                   placeholder="98765 43210"
-                  className="w-full rounded-2xl border border-amber-200/25 bg-[#171106] py-5 pl-24 pr-4 text-2xl font-semibold tracking-[0.12em] text-amber-50 outline-none transition-colors placeholder:text-amber-100/35 focus:border-amber-200/45"
+                  className="w-full rounded-2xl border border-cyan-300/18 bg-[#08111a] py-5 pl-24 pr-4 text-2xl font-semibold tracking-[0.12em] text-white outline-none transition-colors placeholder:text-cyan-50/28 focus:border-cyan-300/42"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))}
                 />
@@ -621,20 +620,20 @@ export default function AuthModal({ onClose, onSuccess }) {
                   setErrorMessage('');
                   setView('PHONE');
                 }}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200/18 bg-[#171106] px-3 py-1.5 text-xs font-semibold text-amber-100/82 transition hover:border-amber-200/36 hover:text-amber-50"
+                className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-[#08111a]/90 px-3 py-1.5 text-xs font-semibold text-cyan-50/82 transition hover:border-cyan-300/36 hover:text-white"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back
               </button>
 
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/30 bg-amber-200/10">
-                <Phone className="h-7 w-7 text-amber-100" />
+              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/24 bg-cyan-300/10">
+                <Phone className="h-7 w-7 text-cyan-100" />
               </div>
-              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-amber-100/75 uppercase">Verification</p>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-amber-50">Enter 6-digit OTP</h2>
-              <p className="mb-8 text-sm text-amber-100/72">
-                Code sent to <span className="font-semibold text-amber-50">+91 {phone}</span>.{' '}
-                <button onClick={() => setView('PHONE')} className="font-semibold text-amber-100 underline underline-offset-4">
+              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Verification</p>
+              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white">Enter 6-digit OTP</h2>
+              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">
+                Code sent to <span className="font-semibold text-white">+91 {phone}</span>.{' '}
+                <button onClick={() => setView('PHONE')} className="font-semibold text-cyan-100 underline underline-offset-4">
                   Edit number
                 </button>
               </p>
@@ -648,7 +647,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                     }}
                     type="tel"
                     maxLength="1"
-                    className="h-16 w-full rounded-xl border border-amber-200/25 bg-[#171106] text-center text-3xl font-semibold text-amber-50 outline-none transition-colors placeholder:text-amber-100/25 focus:border-amber-200/50 sm:h-20"
+                    className="h-16 w-full rounded-xl border border-cyan-300/18 bg-[#08111a] text-center text-3xl font-semibold text-white outline-none transition-colors placeholder:text-cyan-50/22 focus:border-cyan-300/42 sm:h-20"
                     value={digit}
                     placeholder="-"
                     onChange={(event) => handleOtpChange(index, event.target.value)}
@@ -673,7 +672,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                 <button
                   type="button"
                   onClick={sendOTP}
-                  className="text-xs font-semibold text-amber-100/70 underline underline-offset-4 transition-colors hover:text-amber-50"
+                  className="text-xs font-semibold text-cyan-100/70 underline underline-offset-4 transition-colors hover:text-white"
                 >
                   Resend Code
                 </button>
@@ -687,12 +686,12 @@ export default function AuthModal({ onClose, onSuccess }) {
                 initial={{ rotate: -180, scale: 0 }}
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ type: 'spring', damping: 10, stiffness: 100 }}
-                className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-amber-200/20"
+                className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2rem] border border-cyan-300/20 bg-cyan-300/12"
               >
-                <CheckCircle2 className="h-14 w-14 text-amber-100" strokeWidth={2.5} />
+                <CheckCircle2 className="h-14 w-14 text-cyan-100" strokeWidth={2.5} />
               </motion.div>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-amber-50">You are in</h2>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-100/75">{successMessage}</p>
+              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white">You are in</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/70">{successMessage}</p>
             </motion.div>
           )}
         </AnimatePresence>

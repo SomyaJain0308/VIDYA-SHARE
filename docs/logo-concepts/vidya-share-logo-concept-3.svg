@@ -1,0 +1,51 @@
+<svg width="1400" height="1000" viewBox="0 0 1400 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg3" x1="180" y1="70" x2="1220" y2="938" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07101B"/>
+      <stop offset="0.52" stop-color="#111825"/>
+      <stop offset="1" stop-color="#1A130D"/>
+    </linearGradient>
+    <radialGradient id="glow3" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(700 300) rotate(90) scale(290 346)">
+      <stop stop-color="#F4D594" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#F4D594" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold3" x1="522" y1="192" x2="884" y2="592" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF2C7"/>
+      <stop offset="0.45" stop-color="#E4B764"/>
+      <stop offset="1" stop-color="#945F12"/>
+    </linearGradient>
+    <linearGradient id="blue3" x1="620" y1="265" x2="839" y2="498" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B2C7E5"/>
+      <stop offset="1" stop-color="#6284B7"/>
+    </linearGradient>
+    <filter id="shadow3" x="404" y="114" width="592" height="580" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity="0.48"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="1000" rx="40" fill="url(#bg3)"/>
+  <ellipse cx="700" cy="300" rx="350" ry="290" fill="url(#glow3)"/>
+  <circle cx="246" cy="196" r="230" fill="#0C1522" fill-opacity="0.42"/>
+  <circle cx="1168" cy="818" r="274" fill="#20160F" fill-opacity="0.44"/>
+  <path d="M190 760C335 689 451 683 593 739" stroke="#9CB4D7" stroke-opacity="0.11" stroke-width="2"/>
+  <path d="M851 190C983 169 1082 196 1210 281" stroke="#E6BD67" stroke-opacity="0.11" stroke-width="2"/>
+
+  <g filter="url(#shadow3)">
+    <rect x="442" y="146" width="516" height="516" rx="160" fill="#0D121A" fill-opacity="0.82"/>
+    <rect x="442" y="146" width="516" height="516" rx="160" stroke="#E9C472" stroke-opacity="0.22"/>
+
+    <circle cx="700" cy="404" r="138" stroke="url(#gold3)" stroke-width="16" stroke-dasharray="3 0"/>
+    <path d="M612 334L699 477L788 334" stroke="url(#gold3)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M790 328C752 329 718 349 700 378C683 349 648 329 610 328" stroke="url(#blue3)" stroke-width="16" stroke-linecap="round"/>
+    <path d="M640 476H760" stroke="url(#gold3)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M560 404C560 374 573 346 595 326" stroke="url(#gold3)" stroke-width="14" stroke-linecap="round"/>
+    <path d="M841 404C841 373 827 345 804 325" stroke="url(#gold3)" stroke-width="14" stroke-linecap="round"/>
+    <path d="M831 280L854 303L831 326" stroke="url(#gold3)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M569 326L546 303L569 280" stroke="url(#gold3)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="700" cy="252" r="18" fill="#F5E5B8"/>
+  </g>
+
+  <text x="700" y="770" text-anchor="middle" fill="#FFF5D9" font-size="96" font-weight="700" font-family="Syne, Plus Jakarta Sans, Arial, sans-serif" letter-spacing="2">VIDYA SHARE</text>
+  <text x="700" y="830" text-anchor="middle" fill="#D6C29C" font-size="34" font-weight="600" font-family="Plus Jakarta Sans, Arial, sans-serif" letter-spacing="9">MODERN VS MONOGRAM FOR STUDENT TRADE</text>
+  <text x="700" y="900" text-anchor="middle" fill="#8FA8CF" font-size="24" font-weight="500" font-family="Plus Jakarta Sans, Arial, sans-serif" letter-spacing="2">Concept 3: Circular monogram + exchange cues</text>
+</svg>

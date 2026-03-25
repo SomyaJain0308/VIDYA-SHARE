@@ -2,6 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="description" content="Vidya Share is a used books marketplace in Lucknow for students, parents, and families to buy, sell, and exchange second-hand school books locally." />
+    <meta name="keywords" content="used books Lucknow, second hand books Lucknow, school books Lucknow, buy used books, sell used books, NCERT books Lucknow, second hand textbooks, Vidya Share" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="author" content="Vidya Share" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -9,15 +13,273 @@
       rel="stylesheet"
     />
     <link rel="manifest" href="/manifest.json" />
+    <link rel="canonical" href="https://vidya-share-30112.web.app/" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#081329" />
+    <meta name="apple-mobile-web-app-title" content="Vidya Share" />
+    <meta name="theme-color" content="#0d1118" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Vidya Share" />
+    <meta property="og:title" content="Vidya Share | Used Books Marketplace in Lucknow" />
+    <meta property="og:description" content="Buy, sell, and exchange used school books in Lucknow through Vidya Share. A local second-hand books marketplace built for students and families." />
+    <meta property="og:url" content="https://vidya-share-30112.web.app/" />
+    <meta property="og:image" content="https://vidya-share-30112.web.app/icon.svg" />
+    <meta property="og:locale" content="en_IN" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Vidya Share | Used Books Marketplace in Lucknow" />
+    <meta name="twitter:description" content="A Lucknow marketplace for used books, second-hand textbooks, and local student book exchange." />
+    <meta name="twitter:image" content="https://vidya-share-30112.web.app/icon.svg" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vidya Share | Trusted Student Exchange</title>
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Vidya Share | Used Books Marketplace in Lucknow</title>
+    <meta name="vidya-share-build" content="2026-03-26-0030" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://vidya-share-30112.web.app/#website",
+            "url": "https://vidya-share-30112.web.app/",
+            "name": "Vidya Share",
+            "description": "Used books marketplace in Lucknow for school and student books.",
+            "inLanguage": "en-IN"
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://vidya-share-30112.web.app/#organization",
+            "name": "Vidya Share",
+            "url": "https://vidya-share-30112.web.app/",
+            "logo": "https://vidya-share-30112.web.app/icon.svg",
+            "sameAs": []
+          },
+          {
+            "@type": "Service",
+            "@id": "https://vidya-share-30112.web.app/#service",
+            "name": "Vidya Share Used Books Marketplace",
+            "provider": {
+              "@id": "https://vidya-share-30112.web.app/#organization"
+            },
+            "serviceType": "Used books marketplace",
+            "areaServed": {
+              "@type": "City",
+              "name": "Lucknow"
+            },
+            "audience": {
+              "@type": "Audience",
+              "audienceType": "Students, parents, and families"
+            },
+            "description": "A local platform to buy, sell, and exchange second-hand school books in Lucknow."
+          }
+        ]
+      }
+    </script>
+    <script>
+      (function () {
+        var BUILD_VERSION = '2026-03-26-0030';
+        var VERSION_KEY = 'vidya-share-build-version';
+        var RELOAD_KEY = 'vidya-share-build-refresh';
+        var cleanUrl = new URL(window.location.href);
+        var hadRecoveryParam = cleanUrl.searchParams.has('refresh') || cleanUrl.searchParams.has('fresh') || cleanUrl.searchParams.has('boot');
+        if (hadRecoveryParam) {
+          cleanUrl.searchParams.delete('refresh');
+          cleanUrl.searchParams.delete('fresh');
+          cleanUrl.searchParams.delete('boot');
+          window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+        }
+        var storedVersion = '';
+
+        try {
+          storedVersion = window.localStorage.getItem(VERSION_KEY) || '';
+        } catch (error) {
+          storedVersion = '';
+        }
+
+        var shouldRefreshBuild = storedVersion && storedVersion !== BUILD_VERSION;
+
+        try {
+          window.localStorage.setItem(VERSION_KEY, BUILD_VERSION);
+        } catch (error) {
+          console.error('Could not persist build version:', error);
+        }
+
+        if (!('serviceWorker' in navigator)) {
+          if (shouldRefreshBuild) {
+            try {
+              var refreshMarkerNoSw = window.sessionStorage.getItem(RELOAD_KEY);
+              if (refreshMarkerNoSw !== BUILD_VERSION) {
+                window.sessionStorage.setItem(RELOAD_KEY, BUILD_VERSION);
+                var noSwUrl = new URL(window.location.href);
+                noSwUrl.searchParams.set('refresh', BUILD_VERSION);
+                window.location.replace(noSwUrl.toString());
+                return;
+              }
+            } catch (error) {
+              console.error('Build refresh failed:', error);
+            }
+          }
+          return;
+        }
+
+        window.addEventListener('load', async function () {
+          try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            }));
+
+            if ('caches' in window) {
+              const cacheKeys = await window.caches.keys();
+              await Promise.all(cacheKeys.map(function (cacheKey) {
+                return window.caches.delete(cacheKey);
+              }));
+            }
+
+            if (shouldRefreshBuild) {
+              var refreshMarker = '';
+              try {
+                refreshMarker = window.sessionStorage.getItem(RELOAD_KEY) || '';
+              } catch (error) {
+                refreshMarker = '';
+              }
+
+              if (refreshMarker !== BUILD_VERSION) {
+                try {
+                  window.sessionStorage.setItem(RELOAD_KEY, BUILD_VERSION);
+                } catch (error) {
+                  console.error('Could not persist refresh marker:', error);
+                }
+
+                var refreshUrl = new URL(window.location.href);
+                refreshUrl.searchParams.set('refresh', BUILD_VERSION);
+                window.location.replace(refreshUrl.toString());
+                return;
+              }
+            }
+          } catch (error) {
+            console.error('Early cache cleanup failed:', error);
+          }
+        });
+      })();
+    </script>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 16% 0%, rgba(79, 215, 255, 0.16), transparent 34%),
+          radial-gradient(circle at 84% 8%, rgba(0, 122, 255, 0.12), transparent 32%),
+          linear-gradient(180deg, #06101a 0%, #04070d 100%);
+        color: #f3fbff;
+        font-family: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      #boot-shell {
+        display: none;
+      }
+
+      .boot-card {
+        width: min(100%, 420px);
+        border: 1px solid rgba(120, 231, 255, 0.18);
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(10, 18, 28, 0.92), rgba(5, 10, 16, 0.96));
+        box-shadow: 0 28px 70px -38px rgba(0, 0, 0, 0.9);
+        padding: 28px 24px;
+        text-align: center;
+      }
+
+      .boot-mark {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 16px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        background: rgba(101, 227, 255, 0.12);
+        box-shadow: inset 0 0 0 1px rgba(132, 235, 255, 0.14);
+        font-size: 24px;
+      }
+
+      .boot-title {
+        margin: 0;
+        font-family: "Space Grotesk", "Manrope", sans-serif;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .boot-copy {
+        margin: 10px 0 0;
+        color: rgba(232, 248, 255, 0.76);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .boot-actions {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      .boot-btn {
+        appearance: none;
+        border: 1px solid rgba(130, 235, 255, 0.2);
+        border-radius: 999px;
+        padding: 11px 18px;
+        color: #f5fdff;
+        background: rgba(255, 255, 255, 0.04);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .boot-btn--primary {
+        color: #041018;
+        border-color: transparent;
+        background: linear-gradient(135deg, #5be8ff 0%, #c8f6ff 100%);
+      }
+
+    </style>
+    <script>
+      (function () {
+        var buildVersion = '2026-03-26-0030';
+
+        function buildCleanRootUrl() {
+          return window.location.origin + '/';
+        }
+
+        window.__VIDYA_SHARE_OPEN_HOME__ = function () {
+          window.location.replace(buildCleanRootUrl());
+        };
+
+        window.__VIDYA_SHARE_RELOAD_APP__ = function () {
+          window.location.replace(buildCleanRootUrl());
+        };
+
+        window.__VIDYA_SHARE_BOOT_OK__ = function () {};
+        window.__VIDYA_SHARE_BOOT_FAIL__ = function () {};
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-shell" aria-live="polite">
+      <div class="boot-card">
+        <div class="boot-mark">V</div>
+        <h1 class="boot-title">Vidya Share</h1>
+        <p id="boot-copy" class="boot-copy">Loading the used books marketplace…</p>
+        <div class="boot-actions">
+          <button class="boot-btn boot-btn--primary" type="button" onclick="window.__VIDYA_SHARE_RELOAD_APP__()">Reload App</button>
+          <button class="boot-btn" type="button" onclick="window.__VIDYA_SHARE_OPEN_HOME__()">Open Home</button>
+        </div>
+      </div>
+    </div>
+    <noscript>
+      Vidya Share is a used books marketplace in Lucknow where students and families can buy, sell, and exchange second-hand school books locally.
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

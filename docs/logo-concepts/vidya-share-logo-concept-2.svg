@@ -1,0 +1,48 @@
+<svg width="1400" height="1000" viewBox="0 0 1400 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="160" y1="60" x2="1200" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#060B14"/>
+      <stop offset="0.48" stop-color="#101724"/>
+      <stop offset="1" stop-color="#18120C"/>
+    </linearGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(700 300) rotate(90) scale(280 340)">
+      <stop stop-color="#F0D492" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#F0D492" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold2" x1="530" y1="182" x2="883" y2="584" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF0C0"/>
+      <stop offset="0.48" stop-color="#E6B85D"/>
+      <stop offset="1" stop-color="#966313"/>
+    </linearGradient>
+    <linearGradient id="inner2" x1="580" y1="296" x2="814" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7DE"/>
+      <stop offset="1" stop-color="#E2C57D"/>
+    </linearGradient>
+    <filter id="shadow2" x="416" y="118" width="568" height="566" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#000000" flood-opacity="0.48"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="1000" rx="40" fill="url(#bg2)"/>
+  <ellipse cx="700" cy="300" rx="340" ry="280" fill="url(#glow2)"/>
+  <circle cx="226" cy="176" r="236" fill="#0B1320" fill-opacity="0.42"/>
+  <circle cx="1162" cy="824" r="264" fill="#21160D" fill-opacity="0.46"/>
+  <path d="M145 308C280 231 432 225 569 291" stroke="#8BA4CB" stroke-opacity="0.11" stroke-width="2"/>
+  <path d="M844 767C959 708 1074 712 1211 790" stroke="#F0C56A" stroke-opacity="0.11" stroke-width="2"/>
+
+  <g filter="url(#shadow2)">
+    <rect x="450" y="150" width="500" height="500" rx="150" fill="#0D121A" fill-opacity="0.8"/>
+    <rect x="450" y="150" width="500" height="500" rx="150" stroke="#E9C473" stroke-opacity="0.24"/>
+
+    <path d="M701 215C787 215 852 244 893 301C930 352 942 419 930 496C918 566 841 615 701 657C561 615 484 566 472 496C460 419 472 352 509 301C550 244 615 215 701 215Z" stroke="url(#gold2)" stroke-width="18" fill="rgba(255,255,255,0.02)"/>
+    <path d="M584 416C626 382 665 367 701 368C737 367 776 382 818 416V516C777 488 738 474 701 474C664 474 625 488 584 516V416Z" stroke="url(#gold2)" stroke-width="18" fill="none" stroke-linejoin="round"/>
+    <path d="M701 370V476" stroke="url(#gold2)" stroke-width="14" stroke-linecap="round"/>
+    <path d="M593 423C631 399 667 387 701 387C735 387 771 399 809 423" stroke="url(#inner2)" stroke-width="10" stroke-linecap="round" opacity="0.95"/>
+    <path d="M633 290L684 341L771 261" stroke="url(#gold2)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="701" cy="278" r="14" fill="#F7E6BC"/>
+  </g>
+
+  <text x="700" y="770" text-anchor="middle" fill="#FFF5D9" font-size="96" font-weight="700" font-family="Syne, Plus Jakarta Sans, Arial, sans-serif" letter-spacing="2">VIDYA SHARE</text>
+  <text x="700" y="830" text-anchor="middle" fill="#D6C29C" font-size="34" font-weight="600" font-family="Plus Jakarta Sans, Arial, sans-serif" letter-spacing="9">SAFE SCHOOL MARKETPLACE</text>
+  <text x="700" y="900" text-anchor="middle" fill="#8FA8CF" font-size="24" font-weight="500" font-family="Plus Jakarta Sans, Arial, sans-serif" letter-spacing="2">Concept 2: Shield + book + trust check</text>
+</svg>

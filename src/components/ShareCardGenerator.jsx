@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
 import { motion } from 'framer-motion';
 import { Share2, CheckCircle2 } from 'lucide-react';
+import { BrandMark } from './BrandLogo';
 
 export default function ShareCardGenerator({ item, onDone }) {
   const cardRef = useRef(null);
@@ -11,6 +11,7 @@ export default function ShareCardGenerator({ item, onDone }) {
   const generateImage = async () => {
     setIsGenerating(true);
     try {
+      const { default: html2canvas } = await import('html2canvas');
       const canvas = await html2canvas(cardRef.current, {
         scale: 3,
         useCORS: true,
@@ -36,7 +37,7 @@ export default function ShareCardGenerator({ item, onDone }) {
 
         await navigator.share({
           title: `Available: ${item.title}`,
-          text: `Check out this ${item.title} for ${item.school} on Vidya Share.`,
+          text: `Check out this ${item.title}${item.school ? ` for ${item.school}` : ''} on Vidya Share.`,
           files: [file],
         });
       } catch (error) {
@@ -51,21 +52,27 @@ export default function ShareCardGenerator({ item, onDone }) {
   };
 
   return (
-    <div className="flex w-full flex-col items-center">
+    <div className="flex w-full max-w-[1100px] flex-col items-center">
       <div className="absolute left-[-9999px] top-[-9999px] overflow-hidden">
         <div
           ref={cardRef}
           className="flex h-[1920px] w-[1080px] flex-col font-sans"
           style={{
             background:
-              'radial-gradient(circle at 10% 10%, rgba(122,232,255,0.35), transparent 35%), radial-gradient(circle at 90% 7%, rgba(255,214,155,0.4), transparent 26%), linear-gradient(140deg, #071122 0%, #0e2d57 46%, #0f3769 100%)',
+              'radial-gradient(circle at 10% 10%, rgba(246,204,102,0.34), transparent 35%), radial-gradient(circle at 90% 7%, rgba(160,119,52,0.26), transparent 26%), linear-gradient(140deg, #06080d 0%, #121926 46%, #1d140d 100%)',
           }}
         >
           <div className="z-10 flex items-center justify-between px-16 pb-10 pt-20">
-            <h1 className="text-5xl font-black tracking-tight text-white">
-              Vidya<span className="text-cyan-200">Share</span>
-            </h1>
-            <div className="rounded-full bg-emerald-200 px-6 py-3 text-3xl font-bold text-[#053326]">Verified Parent</div>
+            <div className="flex items-center gap-5">
+              <div className="h-24 w-24 overflow-hidden rounded-[2rem]">
+                <img src="/icon.svg" alt="Vidya Share" className="h-full w-full object-cover" crossOrigin="anonymous" />
+              </div>
+              <div>
+                <h1 className="font-display text-5xl font-black tracking-tight text-white">Vidya Share</h1>
+                <p className="mt-2 text-lg font-semibold uppercase tracking-[0.32em] text-cyan-100/82">Trusted used-book exchange</p>
+              </div>
+            </div>
+            <div className="rounded-full bg-cyan-200 px-6 py-3 text-3xl font-bold text-[#082231]">Verified Member</div>
           </div>
 
           <div className="z-10 flex flex-1 flex-col justify-center px-16">
@@ -79,7 +86,7 @@ export default function ShareCardGenerator({ item, onDone }) {
             </div>
 
             <div className="mt-16 rounded-[3rem] bg-white p-12 shadow-xl">
-              <p className="mb-4 text-4xl font-bold uppercase tracking-wide text-[#145aa1]">{item.school}</p>
+              <p className="mb-4 text-4xl font-bold uppercase tracking-wide text-[#7a5418]">{item.school || 'Lucknow Campus Listing'}</p>
               <h2 className="mb-8 text-7xl font-black leading-tight text-slate-900">{item.title}</h2>
 
               <div className="flex items-center gap-6">
@@ -95,13 +102,13 @@ export default function ShareCardGenerator({ item, onDone }) {
             </div>
           </div>
 
-          <div className="z-10 mt-auto flex items-center justify-between rounded-t-[4rem] bg-[#0b2c55] px-16 pb-20 pt-10 text-white">
+          <div className="z-10 mt-auto flex items-center justify-between rounded-t-[4rem] bg-[#24180c] px-16 pb-20 pt-10 text-white">
             <div>
               <p className="mb-2 text-5xl font-bold">Want this?</p>
               <p className="text-3xl text-cyan-100">Reply to my status or check the Vidya Share app.</p>
             </div>
             <div className="flex h-32 w-32 items-center justify-center rounded-3xl bg-white p-4">
-              <span className="text-center text-xl font-bold text-[#0b2c55]">
+              <span className="text-center text-xl font-bold text-[#2f2108]">
                 Scan
                 <br />
                 App
@@ -111,12 +118,21 @@ export default function ShareCardGenerator({ item, onDone }) {
         </div>
       </div>
 
-      <div className="w-full rounded-2xl border border-cyan-100/20 bg-slate-900/30 p-5 text-center">
+      <div className="lux-panel w-full rounded-2xl p-5 text-center sm:p-6">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-200/20">
           <CheckCircle2 className="h-9 w-9 text-emerald-100" />
         </div>
+        <div className="mb-4 flex justify-center">
+          <BrandMark className="h-12 w-12" />
+        </div>
         <h2 className="font-display mb-2 text-2xl font-semibold text-white">Listing published</h2>
-        <p className="mb-6 text-sm text-slate-100/78">Share a status card to reach buyers faster.</p>
+        <p className="mb-4 text-sm text-cyan-50/78">Share a polished status card to reach buyers faster.</p>
+        <div className="lux-panel-soft mb-6 rounded-2xl p-4 text-left text-xs text-cyan-50/75">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Quick steps</p>
+          <p>1. Generate the card.</p>
+          <p>2. Share it on WhatsApp or download.</p>
+          <p>3. Buyers can reply directly for pickup.</p>
+        </div>
 
         {!generatedImage ? (
           <button
@@ -128,7 +144,7 @@ export default function ShareCardGenerator({ item, onDone }) {
           </button>
         ) : (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4">
-            <img src={generatedImage} alt="Preview" className="mx-auto w-48 rounded-xl border border-cyan-100/30 shadow-md" />
+            <img src={generatedImage} alt="Preview" className="mx-auto w-48 rounded-xl border border-cyan-300/24 shadow-md" />
             <div className="flex gap-3">
               <button
                 onClick={handleShare}
@@ -136,7 +152,7 @@ export default function ShareCardGenerator({ item, onDone }) {
               >
                 <Share2 className="h-4 w-4" /> Share Status
               </button>
-              <button onClick={onDone} className="rounded-xl bg-slate-100/14 px-5 py-3.5 text-sm font-semibold text-white">
+              <button onClick={onDone} className="rounded-xl bg-white/10 px-5 py-3.5 text-sm font-semibold text-white">
                 Close
               </button>
             </div>

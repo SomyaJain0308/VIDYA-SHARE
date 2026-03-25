@@ -1,0 +1,52 @@
+<svg width="1400" height="1000" viewBox="0 0 1400 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg1" x1="160" y1="80" x2="1190" y2="930" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#09101B"/>
+      <stop offset="0.5" stop-color="#121824"/>
+      <stop offset="1" stop-color="#1A140E"/>
+    </linearGradient>
+    <radialGradient id="glowGold1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(705 294) rotate(90) scale(300 360)">
+      <stop stop-color="#F3D182" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#F3D182" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="goldStroke1" x1="510" y1="200" x2="890" y2="590" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF2C7"/>
+      <stop offset="0.42" stop-color="#E5BC69"/>
+      <stop offset="1" stop-color="#A77422"/>
+    </linearGradient>
+    <linearGradient id="pageFill1" x1="560" y1="320" x2="840" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8E4"/>
+      <stop offset="1" stop-color="#E9D5A0"/>
+    </linearGradient>
+    <filter id="shadow1" x="410" y="120" width="580" height="560" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="1000" rx="40" fill="url(#bg1)"/>
+  <circle cx="232" cy="192" r="220" fill="#0F1724" fill-opacity="0.46"/>
+  <circle cx="1176" cy="830" r="260" fill="#20170E" fill-opacity="0.55"/>
+  <ellipse cx="700" cy="294" rx="356" ry="294" fill="url(#glowGold1)"/>
+  <path d="M190 784C316 694 494 718 614 792" stroke="#F0C56A" stroke-opacity="0.1" stroke-width="2"/>
+  <path d="M798 202C936 160 1074 204 1178 304" stroke="#98B3DB" stroke-opacity="0.1" stroke-width="2"/>
+
+  <g filter="url(#shadow1)">
+    <rect x="454" y="152" width="492" height="492" rx="132" fill="#0D121A" fill-opacity="0.76" stroke="rgba(255,255,255,0.08)"/>
+    <rect x="454" y="152" width="492" height="492" rx="132" stroke="#E4BD70" stroke-opacity="0.22"/>
+
+    <path d="M565 484C611 433 657 406 701 402V549C656 544 612 554 565 585V484Z" fill="url(#pageFill1)"/>
+    <path d="M837 484C791 433 745 406 701 402V549C746 544 790 554 837 585V484Z" fill="url(#pageFill1)"/>
+    <path d="M560 474C609 422 656 395 701 391C746 395 793 422 842 474V594C794 557 746 540 701 540C656 540 608 557 560 594V474Z" stroke="url(#goldStroke1)" stroke-width="20" stroke-linejoin="round"/>
+    <path d="M701 392V544" stroke="url(#goldStroke1)" stroke-width="16" stroke-linecap="round"/>
+
+    <path d="M592 332C631 286 677 260 726 256C779 251 823 273 856 311" stroke="url(#goldStroke1)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M839 278L859 312L825 331" stroke="url(#goldStroke1)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M810 364C771 410 725 436 676 440C623 445 579 423 546 385" stroke="url(#goldStroke1)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M563 418L543 384L577 365" stroke="url(#goldStroke1)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <circle cx="701" cy="308" r="18" fill="#F8E6B8"/>
+  </g>
+
+  <text x="700" y="770" text-anchor="middle" fill="#FFF5D9" font-size="96" font-weight="700" font-family="Syne, Plus Jakarta Sans, Arial, sans-serif" letter-spacing="2">VIDYA SHARE</text>
+  <text x="700" y="830" text-anchor="middle" fill="#D6C29C" font-size="34" font-weight="600" font-family="Plus Jakarta Sans, Arial, sans-serif" letter-spacing="9">BOOKS • TRUSTED EXCHANGE</text>
+</svg>

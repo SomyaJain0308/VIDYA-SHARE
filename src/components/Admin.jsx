@@ -4,16 +4,16 @@ import { db } from '../firebase';
 import { ShieldAlert, Trash2, Sparkles, Loader2, Database, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 const demoListings = [
-  { title: 'Class 9 Science Textbook', category: 'Books', classGrade: '9', subject: 'Science', price: 220, condition: 'Good' },
-  { title: 'Class 10 Maths Guide', category: 'Books', classGrade: '10', subject: 'Maths', price: 180, condition: 'Like New' },
-  { title: 'Class 8 English Workbook', category: 'Books', classGrade: '8', subject: 'English', price: 90, condition: 'Fair' },
-  { title: 'Class 11 Physics Notes Bundle', category: 'Books', classGrade: '11', subject: 'Physics', price: 150, condition: 'Good' },
-  { title: 'Class 12 Chemistry PYQ Book', category: 'Books', classGrade: '12', subject: 'Chemistry', price: 240, condition: 'Like New' },
-  { title: 'School Uniform Set - Medium', category: 'Uniforms', school: 'St. Marys Academy Saharanpur', size: 'M', price: 450, condition: 'Good' },
-  { title: 'Winter Blazer - Class 7', category: 'Uniforms', school: 'Pinewood School Saharanpur', size: '30', price: 600, condition: 'Good' },
-  { title: 'Sports Kit Shorts + Tee', category: 'Uniforms', school: 'Asha Modern School Saharanpur', size: '32', price: 250, condition: 'Fair' },
-  { title: 'Girls Uniform Pair', category: 'Uniforms', school: 'Delhi Public School Saharanpur', size: '28', price: 500, condition: 'Like New' },
-  { title: 'House T-Shirt Set', category: 'Uniforms', school: 'Sophia Girls High School Saharanpur', size: 'S', price: 200, condition: 'Good' },
+  { title: 'Science Textbook Set', category: 'Books', subject: 'Science', price: 220, condition: 'Good' },
+  { title: 'Maths Practice Guide', category: 'Books', subject: 'Maths', price: 180, condition: 'Like New' },
+  { title: 'English Workbook', category: 'Books', subject: 'English', price: 90, condition: 'Fair' },
+  { title: 'Physics Notes Bundle', category: 'Books', subject: 'Physics', price: 150, condition: 'Good' },
+  { title: 'Chemistry PYQ Book', category: 'Books', subject: 'Chemistry', price: 240, condition: 'Like New' },
+  { title: 'Campus Essentials Set - Medium', category: 'Uniforms', school: 'City Montessori School, Gomti Nagar I', size: 'M', price: 450, condition: 'Good' },
+  { title: 'Winter Blazer', category: 'Uniforms', school: 'La Martiniere College, Lucknow', size: '30', price: 600, condition: 'Good' },
+  { title: 'Sports Kit Shorts + Tee', category: 'Uniforms', school: 'Delhi Public School, Shaheed Path', size: '32', price: 250, condition: 'Fair' },
+  { title: 'Girls Essentials Pair', category: 'Uniforms', school: 'Seth M.R. Jaipuria School, Vineet Khand', size: '28', price: 500, condition: 'Like New' },
+  { title: 'House T-Shirt Set', category: 'Uniforms', school: 'St. Agnes\' Loreto Day School', size: 'S', price: 200, condition: 'Good' },
 ];
 
 const randomImagePool = [
@@ -142,9 +142,9 @@ export default function Admin({ isAdmin = false }) {
           return addDoc(collection(db, 'notices'), {
             ...listing,
             successNote: 'Demo listing for marketplace preview.',
-            colony: 'Mission Compound',
+            colony: 'Gomti Nagar',
             sellerName: 'Demo Seller',
-            sellerSchool: listing.school || 'Saharanpur',
+            sellerSchool: listing.school || 'Lucknow',
             sellerId: `demo-seller-${(index % 3) + 1}`,
             sellerPhone: `98976010${String(index).padStart(2, '0')}`,
             photoUrl: imageUrl,

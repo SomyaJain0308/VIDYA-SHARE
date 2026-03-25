@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://vidya-share-30112.web.app/sitemap.xml

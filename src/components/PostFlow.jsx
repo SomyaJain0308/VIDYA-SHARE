@@ -1,16 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Camera, Loader2, Sparkles, Trash2, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { ArrowLeft, Camera, Loader2, Sparkles, Trash2, ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, getDocs, doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import confetti from 'canvas-confetti';
 import { sendLocalNotification } from '../utils/notifications';
-import ShareCardGenerator from './ShareCardGenerator';
 import { normalizeText, extractKeywords, isLikelyMatch } from '../utils/matching';
-import SchoolSearchInput from './SchoolSearchInput';
-import { SAHARANPUR_SCHOOLS, normalizeSchoolInput } from '../data/schools';
+import { BrandMark } from './BrandLogo';
+
+const ShareCardGenerator = lazy(() => import('./ShareCardGenerator'));
 
 const DEFAULT_FORM_DATA = {
   title: '',
@@ -18,20 +16,18 @@ const DEFAULT_FORM_DATA = {
   price: '',
   successNote: '',
   category: 'Books',
-  classGrade: '',
   subject: '',
   size: '',
   condition: '',
 };
 
-export default function PostFlow({ userProfile, onSuccess }) {
+export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfileSetup }) {
   const UPLOAD_MAX_ATTEMPTS = 2;
   const UPLOAD_IDLE_TIMEOUT_MS = 20000;
   const UPLOAD_TOTAL_TIMEOUT_MS = 150000;
   const [mediaFiles, setMediaFiles] = useState([]);
   const [coverIndex, setCoverIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [postedItem, setPostedItem] = useState(null);
   const [submitError, setSubmitError] = useState('');
@@ -39,8 +35,6 @@ export default function PostFlow({ userProfile, onSuccess }) {
   const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [formData, setFormData] = useState({ ...DEFAULT_FORM_DATA });
 
-  const isUniformCategory = formData.category === 'Uniforms';
-  const isBookCategory = formData.category === 'Books';
   const conditionOptions = ['Like New', 'Good', 'Fair', 'Needs Repair'];
   const sellerContactPhone = userProfile?.contactPhone || userProfile?.phone || auth.currentUser?.phoneNumber || '';
   const mediaFilesRef = useRef([]);
@@ -87,7 +81,9 @@ export default function PostFlow({ userProfile, onSuccess }) {
             savedAt,
             formData: {
               ...formData,
-              school: normalizeSchoolInput(formData.school),
+              category: 'Books',
+              school: '',
+              size: '',
             },
           })
         );
@@ -162,12 +158,18 @@ export default function PostFlow({ userProfile, onSuccess }) {
   };
 
   const triggerSuccess = () => {
-    confetti({
-      particleCount: 150,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#d4af37', '#f3deac', '#b78f32'],
-    });
+    import('canvas-confetti')
+      .then(({ default: confetti }) =>
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#39d0ff', '#b7f4ff', '#5be8ff'],
+        })
+      )
+      .catch((error) => {
+        console.warn('Confetti load failed', error);
+      });
   };
 
   const shouldRetryUpload = (error) => {
@@ -235,38 +237,6 @@ export default function PostFlow({ userProfile, onSuccess }) {
       }
     } catch (error) {
       console.error('Failed to ping requesters for listing', error);
-    }
-  };
-
-  const startScanner = () => {
-    if (isScannerVisible) return;
-    setIsScannerVisible(true);
-    try {
-      setTimeout(() => {
-        const scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: { width: 250, height: 150 } }, false);
-        scanner.render(
-          async (decodedText) => {
-            try {
-              const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${decodedText}`);
-              const data = await response.json();
-              if (data.items && data.items[0]?.volumeInfo?.title) {
-                setFormData((prev) => ({ ...prev, title: data.items[0].volumeInfo.title }));
-                scanner.clear();
-                setIsScannerVisible(false);
-              }
-            } catch (error) {
-              console.log('Scanner lookup failed', error);
-            }
-          },
-          () => {
-            // silent scan errors
-          }
-        );
-      }, 80);
-    } catch (error) {
-      console.error('Failed to start scanner', error);
-      setIsScannerVisible(false);
-      alert('Unable to access camera/scanner. Please allow camera permission or try a different device.');
     }
   };
 
@@ -356,16 +326,14 @@ export default function PostFlow({ userProfile, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
-    const categoryIsUniform = formData.category === 'Uniforms';
 
     if (!auth.currentUser) {
       setSubmitError('Please log in first to post an item.');
       return;
     }
     const trimmedTitle = formData.title.trim();
-    const normalizedSchool = normalizeSchoolInput(formData.school);
-    if (!trimmedTitle || !formData.category || (categoryIsUniform && !normalizedSchool)) {
-      setSubmitError('Please complete title and category. School is required for uniform listings.');
+    if (!trimmedTitle) {
+      setSubmitError('Please add the book title before posting.');
       return;
     }
     if (!sellerContactPhone) {
@@ -396,25 +364,19 @@ export default function PostFlow({ userProfile, onSuccess }) {
       const coverPhotoUrl = uploadedUrls[0] || '';
       const priceValue = Number(formData.price || 0);
       const finalPrice = Number.isNaN(priceValue) ? 0 : priceValue;
-      const schoolForNotice = categoryIsUniform ? normalizedSchool : '';
       const cleanCondition = formData.condition.trim();
-      const cleanClassGrade = formData.classGrade.trim();
       const cleanSubject = formData.subject.trim();
-      const cleanSize = formData.size.trim();
       const cleanFormData = {
         title: trimmedTitle,
-        school: schoolForNotice,
+        school: '',
         price: finalPrice,
         successNote: formData.successNote.trim(),
-        category: formData.category,
+        category: 'Books',
         condition: cleanCondition,
-        classGrade: categoryIsUniform ? '' : cleanClassGrade,
-        subject: categoryIsUniform ? '' : cleanSubject,
-        size: categoryIsUniform ? cleanSize : '',
+        subject: cleanSubject,
+        size: '',
       };
-      const metadataText = categoryIsUniform
-        ? `${cleanFormData.size} ${cleanFormData.condition}`
-        : `${cleanFormData.classGrade} ${cleanFormData.subject} ${cleanFormData.condition}`;
+      const metadataText = `${cleanFormData.subject} ${cleanFormData.condition}`;
       const noticeText = `${cleanFormData.title} ${cleanFormData.category} ${cleanFormData.school} ${metadataText}`.trim();
       const noticeKeywords = extractKeywords(noticeText);
 
@@ -465,95 +427,117 @@ export default function PostFlow({ userProfile, onSuccess }) {
 
   if (postedItem) {
     return (
-      <div className="glass-panel w-full max-w-[980px] rounded-[1.8rem] p-6 sm:p-7">
-        <ShareCardGenerator item={postedItem} onDone={onSuccess} />
+      <div className="glass-panel w-full max-w-[1100px] rounded-[2rem] p-6 sm:p-7">
+        <Suspense
+          fallback={
+            <div className="lux-panel rounded-[1.6rem] px-6 py-4 text-sm font-semibold text-cyan-50/82">
+              Preparing share card...
+            </div>
+          }
+        >
+          <ShareCardGenerator item={postedItem} onDone={onSuccess} />
+        </Suspense>
       </div>
     );
   }
 
-  const fieldClass =
-    'w-full rounded-xl border border-amber-200/32 bg-[#1a1207]/72 px-4 py-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/45 transition focus:border-amber-200/58 focus:bg-[#24190b]/86';
-  const helperCardClass = 'rounded-2xl border border-amber-200/24 bg-[#140e05]/62 p-4 sm:p-5';
+  const fieldClass = 'lux-input text-sm font-medium';
+  const selectClass = 'lux-select text-sm font-medium';
+  const textareaClass = 'lux-textarea text-sm font-medium';
+  const panelClass = 'lux-panel p-4 sm:p-5';
+  const modeLabel = 'Books listing';
+  const modeHint =
+    'Add strong photos, keep the title easy to recognize, and make the book feel trustworthy at first glance.';
+  const progressWidth = `${Math.max(0, Math.min(100, Math.round(uploadProgress)))}%`;
   const draftTimeLabel = draftSavedAt
     ? new Date(draftSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
 
   return (
-    <motion.form onSubmit={handleSubmit} className="glass-panel w-full max-w-[1240px] rounded-[1.9rem] p-5 pt-[max(1rem,env(safe-area-inset-top))] sm:p-7">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-amber-200/18 pb-4">
-        <div>
-          <p className="inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-amber-100 uppercase">
-            <Sparkles className="h-3.5 w-3.5" />
-            Listing Flow
-          </p>
-          <h2 className="font-display mt-3 text-2xl font-semibold text-amber-50 sm:text-3xl">Create a trusted listing</h2>
-          <p className="mt-1 text-sm text-amber-100/75">Keep it clean, clear, and local so families respond faster.</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="rounded-full border border-amber-200/25 bg-[#161006]/80 px-4 py-2 text-xs font-semibold text-amber-100/82">
-            {isUniformCategory ? 'Uniform listing mode' : 'Books listing mode'}
-          </div>
-          <div className="flex items-center gap-2">
-            {draftMessage && (
-              <p className="text-[11px] font-semibold text-amber-100/70">
-                {draftMessage}
-                {draftTimeLabel ? ` · ${draftTimeLabel}` : ''}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={clearDraft}
-              className="rounded-full border border-amber-200/25 px-3 py-1.5 text-[11px] font-semibold text-amber-100/75 transition hover:bg-amber-100/10 hover:text-amber-50"
-            >
-              Clear draft
-            </button>
-          </div>
-        </div>
+    <motion.form
+      onSubmit={handleSubmit}
+      className="glass-panel min-h-dvh w-full max-w-[1540px] overflow-y-auto rounded-none p-4 pt-[max(0.95rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:min-h-0 sm:rounded-[2rem] sm:p-6 lg:p-7 xl:p-8"
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-[#08111a]/88 px-4 py-2 text-sm font-semibold text-cyan-50 transition hover:border-cyan-300/34 hover:bg-white/[0.08]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+        <p className="hidden text-xs font-semibold text-cyan-50/54 sm:block">Press Esc to go back</p>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <label className="relative block h-[250px] w-full cursor-pointer overflow-hidden rounded-2xl border border-dashed border-amber-200/40 bg-[#151005]/85 transition-colors hover:bg-[#1d1507] lg:h-[410px]">
-            {mediaFiles.length > 0 ? (
-              <img src={mediaFiles[coverIndex]?.previewUrl} alt="Preview" className="h-full w-full object-cover" />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-amber-100/80">
-                <Camera className="mb-2 h-10 w-10" />
-                <span className="text-sm font-semibold">Tap to add product photos</span>
-                <span className="mt-1 text-xs text-amber-100/62">Up to 6 photos, cover selectable</span>
+      <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.96fr)_minmax(0,1.04fr)]">
+        <section className="space-y-4 2xl:sticky 2xl:top-5 2xl:self-start">
+          <div className={panelClass}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="lux-kicker">Media stage</p>
+                <h3 className="lux-title mt-2 text-xl">Make the item feel premium</h3>
               </div>
-            )}
-            <div className="pointer-events-none absolute right-3 top-3 rounded-full border border-amber-200/35 bg-black/50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-amber-100">
-              {mediaFiles.length}/6
+              <span className="rounded-full border border-cyan-300/18 bg-[#09111a]/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-50/74">
+                Cover ready
+              </span>
             </div>
-            <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
-          </label>
+            <label className="group relative block h-[260px] w-full cursor-pointer overflow-hidden rounded-[1.7rem] border border-dashed border-cyan-300/24 bg-[#08111a]/90 transition hover:border-cyan-300/38 hover:bg-[#0a141f] sm:h-[320px] lg:h-[380px] xl:h-[430px] 2xl:h-[500px]">
+              {mediaFiles.length > 0 ? (
+                <>
+                  <img
+                    src={mediaFiles[coverIndex]?.previewUrl}
+                    alt="Preview"
+                    className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"
+                  />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,3,1,0.04),rgba(5,3,1,0.55))]" />
+                </>
+              ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-cyan-50/82">
+                  <div className="mb-4 rounded-[1.4rem] border border-cyan-300/25 bg-black/28 p-4">
+                    <Camera className="h-10 w-10 text-cyan-100" />
+                  </div>
+                  <span className="text-base font-semibold">Tap to add listing photos</span>
+                  <span className="mt-1 text-xs text-cyan-50/58">Up to 6 photos, choose one as cover</span>
+                  <div className="mt-5 max-w-xs rounded-[1.1rem] border border-cyan-300/14 bg-black/22 px-4 py-3 text-center text-[11px] font-medium leading-relaxed text-cyan-50/66">
+                    Front view, spine, close-up condition, and one real-life context shot usually performs best.
+                  </div>
+                </div>
+              )}
+              <div className="pointer-events-none absolute right-3 top-3 rounded-full border border-cyan-300/28 bg-black/50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-cyan-50/82">
+                {mediaFiles.length}/6
+              </div>
+              <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-cyan-300/24 bg-black/48 px-2.5 py-1 text-[10px] font-semibold text-cyan-50/84">
+                First image appears in feed
+              </div>
+              <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
+            </label>
 
           {mediaFiles.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="lux-scroll grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4">
               {mediaFiles.map((media, index) => (
-                <div key={media.id} className="group relative overflow-hidden rounded-xl border border-amber-200/22 bg-[#130d05]">
-                  <img src={media.previewUrl} alt={`Listing ${index + 1}`} className="h-20 w-full object-cover sm:h-24" />
+                <div key={media.id} className="group relative overflow-hidden rounded-xl border border-cyan-300/14 bg-[#08111a]">
+                  <img src={media.previewUrl} alt={`Listing ${index + 1}`} className="h-24 w-full object-cover xl:h-28" />
                   <div className="absolute left-1.5 top-1.5">
                     <button
                       type="button"
                       onClick={() => setCoverIndex(index)}
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition ${
                         coverIndex === index
-                          ? 'border border-amber-100/50 bg-amber-200 text-[#3d2a05]'
-                          : 'border border-amber-200/40 bg-black/55 text-amber-100 hover:bg-black/75'
+                          ? 'border border-cyan-100/50 bg-cyan-200 text-[#051017]'
+                          : 'border border-cyan-300/24 bg-black/55 text-cyan-50 hover:bg-black/75'
                       }`}
                     >
                       <Star className={`h-3 w-3 ${coverIndex === index ? 'fill-current' : ''}`} />
                       {coverIndex === index ? 'Cover' : 'Set'}
                     </button>
                   </div>
-                  <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full border border-amber-200/28 bg-black/55 px-1.5 py-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full border border-cyan-300/20 bg-black/55 px-1.5 py-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={() => moveMedia(index, -1)}
                       disabled={index === 0}
-                      className="rounded-full p-1 text-amber-100 disabled:opacity-35"
+                      className="rounded-full p-1 text-cyan-50 disabled:opacity-35"
                       aria-label="Move image left"
                     >
                       <ChevronLeft className="h-3.5 w-3.5" />
@@ -562,7 +546,7 @@ export default function PostFlow({ userProfile, onSuccess }) {
                       type="button"
                       onClick={() => moveMedia(index, 1)}
                       disabled={index === mediaFiles.length - 1}
-                      className="rounded-full p-1 text-amber-100 disabled:opacity-35"
+                      className="rounded-full p-1 text-cyan-50 disabled:opacity-35"
                       aria-label="Move image right"
                     >
                       <ChevronRight className="h-3.5 w-3.5" />
@@ -581,161 +565,187 @@ export default function PostFlow({ userProfile, onSuccess }) {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={startScanner}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/30 bg-amber-200/12 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-200/18"
-          >
-            <Camera className="h-4 w-4" /> Scan Book Barcode
-          </button>
-
-          {isScannerVisible && <div id="reader" className="overflow-hidden rounded-2xl border border-amber-200/20 bg-[#110c04]" />}
-
-          <div className={helperCardClass}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/72">Quick quality checklist</p>
-            <ul className="mt-2 space-y-1.5 text-sm text-amber-100/80">
-              <li>Use 3 to 6 clear photos (front, side, condition).</li>
-              <li>Mention class/subject for books.</li>
-              <li>Keep price realistic for students.</li>
+          <div className={`${panelClass} mt-4`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Quality checklist</p>
+            <ul className="mt-2 space-y-1.5 text-sm text-cyan-50/82">
+              <li>Use 3-6 clear photos showing real condition.</li>
+              <li>Keep title specific so buyers find it quickly.</li>
+              <li>Set practical pricing so the offer feels fair and easy to trust.</li>
             </ul>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-amber-200/24 bg-[#130d05]/48 p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-3 border-b border-amber-200/14 pb-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/68">Item details</p>
-            <p className="text-xs text-amber-100/65">Looks great on desktop and phone</p>
           </div>
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            <input
-              type="text"
-              placeholder="Item Name (e.g., Class 8 History)"
-              className={`${fieldClass} sm:col-span-2`}
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="Price in Rs (0 for free)"
-              className={fieldClass}
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-            />
-            <select
-              className={fieldClass}
-              value={formData.category}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  category: e.target.value,
-                  school: e.target.value === 'Uniforms' ? prev.school : '',
-                  classGrade: e.target.value === 'Books' ? prev.classGrade : '',
-                  subject: e.target.value === 'Books' ? prev.subject : '',
-                  size: e.target.value === 'Uniforms' ? prev.size : '',
-                  condition: prev.condition,
-                }))
-              }
-            >
-              <option className="text-slate-800" value="">
-                Select Category
-              </option>
-              <option className="text-slate-800" value="Books">
-                Books &amp; Notes
-              </option>
-              <option className="text-slate-800" value="Uniforms">
-                Uniforms &amp; Sports
-              </option>
-            </select>
+        </section>
 
-            {isUniformCategory && (
-              <div className="space-y-3.5 sm:col-span-2">
-                <SchoolSearchInput
-                  id="uniform-school"
-                  required
-                  value={formData.school}
-                  onChange={(nextSchool) => setFormData((prev) => ({ ...prev, school: nextSchool }))}
-                  schools={SAHARANPUR_SCHOOLS}
-                  placeholder="Search school for this uniform listing"
-                  helperText="School tagging is only for uniforms so buyers can match exact school requirements."
-                />
-                <input
-                  type="text"
-                  placeholder="Uniform size (e.g., 34, M, Class 7)"
-                  className={fieldClass}
-                  value={formData.size}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, size: e.target.value }))}
-                />
+        <section className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="space-y-4">
+            <div className="lux-panel p-4 sm:p-5">
+              <div className="mb-4 flex items-center justify-between gap-3 border-b border-cyan-300/14 pb-3">
+                <div>
+                  <p className="lux-kicker">Item details</p>
+                  <h3 className="lux-title mt-2 text-xl">What are you listing?</h3>
+                </div>
               </div>
-            )}
-
-            {isBookCategory && (
-              <>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="lux-meta-chip">Books</span>
+                <span className="lux-meta-chip">{formData.price ? `Rs ${formData.price}` : 'Set pricing'}</span>
+                <span className="lux-meta-chip">{formData.subject || 'General discovery'}</span>
+              </div>
+              <div className="grid gap-3.5 sm:grid-cols-2">
                 <input
                   type="text"
-                  placeholder="Class / Grade (Optional)"
+                  placeholder="Book name (e.g., RD Sharma Maths Guide)"
+                  className={`${fieldClass} sm:col-span-2`}
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Price in Rs (0 for free)"
                   className={fieldClass}
-                  value={formData.classGrade}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, classGrade: e.target.value }))}
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 />
                 <input
                   type="text"
-                  placeholder="Subject (Optional)"
+                  placeholder="Subject or exam detail (optional)"
                   className={fieldClass}
                   value={formData.subject}
                   onChange={(e) => setFormData((prev) => ({ ...prev, subject: e.target.value }))}
                 />
-              </>
-            )}
 
-            <select
-              className={`${fieldClass} sm:col-span-2`}
-              value={formData.condition}
-              onChange={(e) => setFormData((prev) => ({ ...prev, condition: e.target.value }))}
-            >
-              <option className="text-slate-800" value="">
-                Select condition (optional)
-              </option>
-              {conditionOptions.map((condition) => (
-                <option key={condition} className="text-slate-800" value={condition}>
-                  {condition}
-                </option>
-              ))}
-            </select>
+                <select
+                  className={`${selectClass} sm:col-span-2`}
+                  value={formData.condition}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, condition: e.target.value }))}
+                >
+                  <option className="text-slate-800" value="">
+                    Select condition (optional)
+                  </option>
+                  {conditionOptions.map((condition) => (
+                    <option key={condition} className="text-slate-800" value={condition}>
+                      {condition}
+                    </option>
+                  ))}
+                </select>
 
-            <div className="sm:col-span-2">
-              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-100/90">
-                <Sparkles className="h-4 w-4 text-amber-100" /> A tip for the next family? (Optional)
-              </label>
-              <textarea
-                rows="3"
-                placeholder="e.g., Teacher prefers neat diagrams and labeled answers."
-                className={`${fieldClass} resize-none`}
-                value={formData.successNote}
-                onChange={(e) => setFormData({ ...formData, successNote: e.target.value })}
-              />
+                <div className="sm:col-span-2">
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-cyan-50/90">
+                    <Sparkles className="h-4 w-4 text-cyan-100" /> A tip for the next family? (Optional)
+                  </label>
+                  <textarea
+                    rows="3"
+                    placeholder="e.g., Teacher prefers neat diagrams and labeled answers."
+                    className={textareaClass}
+                    value={formData.successNote}
+                    onChange={(e) => setFormData({ ...formData, successNote: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+          <div className="lux-panel p-4 sm:p-5">
+            <p className="lux-kicker">Seller trust</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="lux-stat-tile">
+                <p className="lux-kicker">Contact</p>
+                <strong className="!text-[1.15rem]">{sellerContactPhone ? 'Ready' : 'Missing'}</strong>
+                <p className="mt-2 text-xs text-cyan-50/66">Buyers can only connect if your contact profile is complete.</p>
+                {!sellerContactPhone && (
+                  <button
+                    type="button"
+                    onClick={onOpenProfileSetup}
+                    className="mt-3 inline-flex items-center justify-center rounded-full border border-cyan-300/18 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-50 transition hover:bg-cyan-300/16"
+                  >
+                    Add mobile number
+                  </button>
+                )}
+              </div>
+              <div className="lux-stat-tile">
+                <p className="lux-kicker">Photos</p>
+                <strong className="!text-[1.15rem]">{mediaFiles.length}</strong>
+                <p className="mt-2 text-xs text-cyan-50/66">Clear product photos make listings feel dramatically more trustworthy.</p>
+              </div>
+              <div className="lux-stat-tile">
+                <p className="lux-kicker">Reach</p>
+                <strong className="!text-[1.15rem]">City-wide</strong>
+                <p className="mt-2 text-xs text-cyan-50/66">Strong titles and photos matter more than extra form fields here.</p>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+          </div>
 
-      <button
-        disabled={isSubmitting}
-        type="submit"
-        className="btn-primary relative mt-6 w-full overflow-hidden rounded-xl py-3.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isSubmitting ? (
-          <span className="relative z-10 flex items-center justify-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Uploading {Math.round(uploadProgress)}%
-          </span>
-        ) : (
-          'Post to Community'
-        )}
-        {isSubmitting && <div className="absolute bottom-0 left-0 top-0 bg-black/20 transition-all" style={{ width: `${uploadProgress}%` }} />}
-      </button>
-      {submitError && (
-        <p className="mt-3 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{submitError}</p>
-      )}
+          <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+            <div className="lux-panel p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="lux-kicker">Publish listing</p>
+                  <h3 className="lux-title mt-2 text-xl">Ready to go live</h3>
+                </div>
+                {isSubmitting && (
+                  <p className="text-xs font-semibold text-cyan-50/84">Uploading {Math.round(uploadProgress)}%</p>
+                )}
+              </div>
+              {isSubmitting && (
+                <div className="mb-4 h-2 overflow-hidden rounded-full bg-black/35">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#39d0ff,#b7f4ff)] transition-all"
+                    style={{ width: progressWidth }}
+                  />
+                </div>
+              )}
+              <div className="lux-panel-soft mb-4 p-4">
+                <p className="text-sm font-semibold text-white">{formData.title.trim() || 'Your book title will appear here'}</p>
+                <p className="mt-2 text-xs text-cyan-50/72">
+                  {Number(formData.price || 0) === 0 ? 'Free listing' : formData.price ? `Rs ${formData.price}` : 'Set a price'}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {['Books', formData.subject || 'General discovery', formData.condition || 'Set condition'].map((meta) => (
+                    <span key={`publish-${meta}`} className="lux-meta-chip">
+                      {meta}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button
+                disabled={isSubmitting}
+                type="submit"
+                className="btn-primary relative w-full overflow-hidden rounded-xl py-3.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Uploading {Math.round(uploadProgress)}%
+                  </span>
+                ) : (
+                  'Post to Community'
+                )}
+                {isSubmitting && (
+                  <div className="absolute bottom-0 left-0 top-0 bg-black/20 transition-all" style={{ width: progressWidth }} />
+                )}
+              </button>
+              {submitError && (
+                <div className="mt-3 space-y-3 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-3 text-sm font-semibold text-rose-100">
+                  <p>{submitError}</p>
+                  {!sellerContactPhone && (
+                    <button
+                      type="button"
+                      onClick={onOpenProfileSetup}
+                      className="inline-flex items-center justify-center rounded-full border border-cyan-300/18 bg-[#08111a]/90 px-3.5 py-2 text-xs font-semibold text-cyan-50 transition hover:border-cyan-300/34 hover:bg-white/[0.08]"
+                    >
+                      Open profile setup
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="hidden lux-panel-soft p-4 text-sm text-cyan-50/76 sm:block">
+              <p>Use your clearest photo as cover.</p>
+              <p className="mt-2">Keep the item name precise and recognizable.</p>
+              <p className="mt-2">This posting flow is focused only on books.</p>
+            </div>
+          </aside>
+        </section>
+      </div>
     </motion.form>
   );
 }

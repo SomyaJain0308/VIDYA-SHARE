@@ -13,15 +13,16 @@ const timeAgo = (timestamp) => {
 };
 
 const getStatusMeta = (status) => {
-  if (status === 'fulfilled') return { label: 'Fulfilled', className: 'bg-emerald-200 text-[#173724]' };
-  if (status === 'matched') return { label: 'Matched', className: 'bg-amber-200 text-[#3f2a02]' };
-  return { label: 'Open', className: 'bg-sky-200 text-[#17304a]' };
+  if (status === 'fulfilled')
+    return { label: 'Fulfilled', className: 'border border-emerald-200/40 bg-emerald-200 text-[#173724]' };
+  if (status === 'matched')
+    return { label: 'Matched', className: 'border border-cyan-200/45 bg-cyan-200 text-[#082231]' };
+  return { label: 'Open', className: 'border border-sky-200/45 bg-sky-200 text-[#17304a]' };
 };
 
 const buildRequestSummary = (request) => {
   const chips = [];
   if (request.category) chips.push(request.category);
-  if (request.classGrade) chips.push(`Class ${request.classGrade}`);
   if (request.subject) chips.push(request.subject);
   if (request.school) chips.push(request.school);
   if (request.budget && Number(request.budget) > 0) chips.push(`Budget Rs ${request.budget}`);
@@ -37,15 +38,18 @@ export default function RequestBoard({
 }) {
   return (
     <div className="space-y-3 sm:space-y-4">
-      <div className="glass-panel rounded-2xl p-4 sm:p-5">
-        <p className="flex items-center gap-2 text-sm text-amber-100/88">
-          <MessagesSquare className="h-4 w-4 text-amber-100/90" />
+      <div className="lux-panel-soft rounded-2xl p-4 sm:p-5">
+        <p className="flex items-center gap-2 text-sm text-cyan-50/84">
+          <MessagesSquare className="h-4 w-4 text-cyan-100/90" />
           Structured requests are shared with nearby sellers and matched automatically.
         </p>
       </div>
 
       {requests.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-8 text-center text-sm text-amber-100/78">
+        <div className="lux-panel rounded-2xl p-8 text-center text-sm text-cyan-50/76">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/5">
+            <MessagesSquare className="h-5 w-5 text-cyan-100/70" />
+          </div>
           No wishlist posts yet. Be the first to request something.
         </div>
       ) : (
@@ -64,14 +68,16 @@ export default function RequestBoard({
           return (
             <article
               key={request.id}
-              className="glass-panel flex flex-col items-start justify-between gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:border-amber-200/45 sm:p-5"
+              className="lux-panel flex flex-col items-start justify-between gap-3 rounded-[1.4rem] p-4 transition-all hover:-translate-y-0.5 hover:border-cyan-300/28 sm:p-5"
             >
               <div className="w-full min-w-0">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="line-clamp-2 font-semibold text-amber-50">{request.text}</h4>
+                  <h4 className="line-clamp-2 font-semibold text-white">{request.text}</h4>
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.className}`}>{statusMeta.label}</span>
-                    <span className="text-xs text-amber-100/68">{timeAgo(request.createdAt)}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.className}`}>
+                      {statusMeta.label}
+                    </span>
+                    <span className="text-xs text-cyan-50/62">{timeAgo(request.createdAt)}</span>
                   </div>
                 </div>
 
@@ -80,7 +86,7 @@ export default function RequestBoard({
                     {chips.map((chip) => (
                       <span
                         key={`${request.id}-${chip}`}
-                        className="rounded-full border border-amber-200/25 bg-[#1a1207] px-2.5 py-1 text-[10px] font-semibold text-amber-100/88"
+                        className="rounded-full border border-cyan-300/18 bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-cyan-50/84"
                       >
                         {chip}
                       </span>
@@ -89,7 +95,7 @@ export default function RequestBoard({
                 )}
 
                 {typeof request.matchedCount === 'number' && request.matchedCount > 0 && (
-                  <p className="mt-2 text-xs font-semibold text-amber-100/82">{request.matchedCount} seller matches found</p>
+                  <p className="mt-2 text-xs font-semibold text-cyan-50/82">{request.matchedCount} seller matches found</p>
                 )}
               </div>
 
@@ -99,7 +105,7 @@ export default function RequestBoard({
                     href={whatsappLink}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-full bg-amber-200 px-3.5 py-1.5 text-xs font-bold text-[#3a2807] transition hover:brightness-105 whitespace-nowrap"
+                    className="rounded-full bg-cyan-200 px-3.5 py-1.5 text-xs font-bold text-[#061923] transition hover:brightness-105 whitespace-nowrap"
                   >
                     I have this
                   </a>

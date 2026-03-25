@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, deleteDoc, doc, getDoc, onSnapshot, updateDoc, serverTimestamp, setDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Trash2, PackageOpen, Loader2, Award, ShieldCheck, Zap, Sparkles, CheckCircle2, XCircle, PencilLine, X } from 'lucide-react';
-import SchoolSearchInput from './SchoolSearchInput';
-import { SAHARANPUR_SCHOOLS, normalizeSchoolInput } from '../data/schools';
 
 const formatRelativeTime = (timestamp) => {
   if (!timestamp?.toDate) return 'Just now';
@@ -116,7 +114,6 @@ export default function MyPosts() {
       category: item.category || 'Books',
       school: item.school || '',
       price: item.price === 0 ? '0' : String(item.price || ''),
-      classGrade: item.classGrade || '',
       subject: item.subject || '',
       size: item.size || '',
       condition: item.condition || '',
@@ -135,17 +132,11 @@ export default function MyPosts() {
     if (!editingItem?.id) return;
 
     const trimmedTitle = editForm.title.trim();
-    const isUniform = editForm.category === 'Uniforms';
-    const normalizedSchool = normalizeSchoolInput(editForm.school);
     const priceValue = Number(editForm.price || 0);
     const cleanPrice = Number.isNaN(priceValue) ? 0 : Math.max(0, priceValue);
 
     if (!trimmedTitle) {
       setEditError('Title is required.');
-      return;
-    }
-    if (isUniform && !normalizedSchool) {
-      setEditError('School is required for uniform listings.');
       return;
     }
 
@@ -154,12 +145,11 @@ export default function MyPosts() {
     try {
       await updateDoc(doc(db, 'notices', editingItem.id), {
         title: trimmedTitle,
-        category: editForm.category,
-        school: isUniform ? normalizedSchool : '',
+        category: 'Books',
+        school: '',
         price: cleanPrice,
-        classGrade: isUniform ? '' : editForm.classGrade.trim(),
-        subject: isUniform ? '' : editForm.subject.trim(),
-        size: isUniform ? editForm.size.trim() : '',
+        subject: editForm.subject.trim(),
+        size: '',
         condition: editForm.condition.trim(),
         successNote: editForm.successNote.trim(),
         updatedAt: serverTimestamp(),
@@ -248,12 +238,12 @@ export default function MyPosts() {
 
   const getStatusMeta = (status) => {
     if (status === 'sold') return { label: 'Sold', badgeClass: 'bg-rose-300/85 text-[#4a1b25]' };
-    if (status === 'reserved') return { label: 'Reserved', badgeClass: 'bg-amber-200 text-[#3f2a02]' };
+    if (status === 'reserved') return { label: 'Reserved', badgeClass: 'bg-cyan-200 text-[#082231]' };
     return { label: 'Active', badgeClass: 'bg-emerald-200/90 text-[#153421]' };
   };
 
   const getDealStatusMeta = (status) => {
-    if (status === 'accepted') return { label: 'Accepted', className: 'bg-amber-200 text-[#3f2a02]' };
+    if (status === 'accepted') return { label: 'Accepted', className: 'bg-cyan-200 text-[#082231]' };
     if (status === 'completed') return { label: 'Completed', className: 'bg-emerald-200 text-[#153421]' };
     if (status === 'declined') return { label: 'Declined', className: 'bg-rose-300/85 text-[#4a1b25]' };
     return { label: 'Pending', className: 'bg-sky-200 text-[#17304a]' };
@@ -262,7 +252,7 @@ export default function MyPosts() {
   if (loading) {
     return (
       <div className="flex justify-center p-14">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-100" />
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-100" />
       </div>
     );
   }
@@ -270,54 +260,54 @@ export default function MyPosts() {
   const karma = userProfile?.karmaPoints || 0;
   const tier =
     karma >= 100
-      ? { name: 'Community Pillar', color: 'bg-amber-200 text-[#3f2a02]', icon: <Award className="h-4 w-4" /> }
+      ? { name: 'Community Pillar', color: 'bg-cyan-200 text-[#082231]', icon: <Award className="h-4 w-4" /> }
       : karma >= 50
-        ? { name: 'Trusted Senior', color: 'bg-[#d7c9a3] text-[#2f2107]', icon: <ShieldCheck className="h-4 w-4" /> }
-        : { name: 'Neighborhood Helper', color: 'bg-[#c9b37c] text-[#332206]', icon: <Zap className="h-4 w-4" /> };
+        ? { name: 'Trusted Senior', color: 'bg-cyan-100/90 text-[#082231]', icon: <ShieldCheck className="h-4 w-4" /> }
+        : { name: 'Neighborhood Helper', color: 'bg-cyan-300/75 text-[#082231]', icon: <Zap className="h-4 w-4" /> };
 
   const successfulHandovers = userProfile?.successfulHandovers || myItems.filter((item) => (item.status || 'active') === 'sold').length;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-3 pb-14 pt-4 sm:px-6">
-      <section className="glass-panel relative mb-5 overflow-hidden rounded-[1.6rem] p-5 sm:p-6">
+    <div className="mx-auto w-full max-w-[1480px] px-3 pb-14 pt-4 sm:px-6">
+      <section className="lux-panel relative mb-5 overflow-hidden p-5 sm:p-6">
         <div className="absolute right-0 top-0 p-6 opacity-20 sm:p-8">
-          <Award className="h-24 w-24 text-amber-100" />
+          <Award className="h-24 w-24 text-cyan-100" />
         </div>
 
-        <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-amber-100 uppercase">
+        <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-300/22 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-cyan-50 uppercase">
           <Sparkles className="h-3.5 w-3.5" />
           Member Dashboard
         </p>
 
-        <h2 className="font-display mb-1 text-2xl font-semibold text-amber-50">{userProfile?.displayName || 'Community Member'}</h2>
+        <h2 className="font-display mb-1 text-2xl font-semibold text-white">{userProfile?.displayName || 'Community Member'}</h2>
         <div className={`mb-6 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${tier.color}`}>
           {tier.icon} {tier.name}
         </div>
 
-        <div className="grid grid-cols-3 gap-3 border-t border-amber-200/20 pt-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Karma Points</p>
-            <p className="font-display text-3xl font-semibold text-amber-100">{karma}</p>
+        <div className="grid gap-3 border-t border-cyan-300/12 pt-4 sm:grid-cols-3">
+          <div className="lux-panel-soft p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-50/54">Aura Points</p>
+            <p className="font-display text-3xl font-semibold text-cyan-100">{karma}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Items Shared</p>
-            <p className="font-display text-3xl font-semibold text-amber-50">{myItems.length}</p>
+          <div className="lux-panel-soft p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-50/54">Items Shared</p>
+            <p className="font-display text-3xl font-semibold text-white">{myItems.length}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Handovers</p>
+          <div className="lux-panel-soft p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-50/54">Handovers</p>
             <p className="font-display text-3xl font-semibold text-emerald-200">{successfulHandovers}</p>
           </div>
         </div>
       </section>
 
-      <section className="glass-panel mb-5 rounded-[1.6rem] p-5 sm:p-6">
-        <h3 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-amber-50">
-          <ShieldCheck className="h-5 w-5 text-amber-100" />
+      <section className="lux-panel mb-5 p-5 sm:p-6">
+        <h3 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-white">
+          <ShieldCheck className="h-5 w-5 text-cyan-100" />
           Pickup Requests
         </h3>
 
         {dealRequests.length === 0 ? (
-          <p className="text-sm text-amber-100/75">No pickup requests yet.</p>
+          <p className="text-sm text-cyan-50/72">No pickup requests yet.</p>
         ) : (
           <div className="space-y-3">
             {dealRequests.map((deal) => {
@@ -325,30 +315,30 @@ export default function MyPosts() {
               const isBusy = dealActionId === deal.id;
 
               return (
-                <article key={deal.id} className="rounded-2xl border border-amber-200/18 bg-[#130d05]/70 p-4">
+                <article key={deal.id} className="lux-panel-soft rounded-2xl p-4">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="font-semibold text-amber-50">{deal.noticeTitle || 'Listing'}</h4>
+                    <h4 className="font-semibold text-white">{deal.noticeTitle || 'Listing'}</h4>
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.className}`}>{statusMeta.label}</span>
                   </div>
 
-                  <p className="text-xs text-amber-100/75">
-                    Buyer: <span className="font-semibold text-amber-50">{deal.buyerName || 'Community member'}</span>
+                  <p className="text-xs text-cyan-50/75">
+                    Buyer: <span className="font-semibold text-white">{deal.buyerName || 'Community member'}</span>
                   </p>
-                  <p className="mt-1 text-xs text-amber-100/75">
-                    Phone: <span className="font-semibold text-amber-50">{deal.buyerPhone || 'Not shared'}</span>
+                  <p className="mt-1 text-xs text-cyan-50/75">
+                    Phone: <span className="font-semibold text-white">{deal.buyerPhone || 'Not shared'}</span>
                   </p>
                   {deal.preferredMeetup && (
-                    <p className="mt-1 text-xs text-amber-100/75">
-                      Meetup: <span className="font-semibold text-amber-50">{deal.preferredMeetup}</span>
+                    <p className="mt-1 text-xs text-cyan-50/75">
+                      Meetup: <span className="font-semibold text-white">{deal.preferredMeetup}</span>
                     </p>
                   )}
                   {deal.preferredTime && (
-                    <p className="mt-1 text-xs text-amber-100/75">
-                      Time: <span className="font-semibold text-amber-50">{deal.preferredTime}</span>
+                    <p className="mt-1 text-xs text-cyan-50/75">
+                      Time: <span className="font-semibold text-white">{deal.preferredTime}</span>
                     </p>
                   )}
-                  {deal.note && <p className="mt-2 rounded-lg border border-amber-200/18 bg-[#1a1207] px-3 py-2 text-xs text-amber-100/82">{deal.note}</p>}
-                  <p className="mt-2 text-[11px] text-amber-100/62">{formatRelativeTime(deal.createdAt)}</p>
+                  {deal.note && <p className="mt-2 rounded-lg border border-cyan-300/16 bg-[#08111a]/86 px-3 py-2 text-xs text-cyan-50/82">{deal.note}</p>}
+                  <p className="mt-2 text-[11px] text-cyan-50/58">{formatRelativeTime(deal.createdAt)}</p>
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(deal.status || 'pending') === 'pending' && (
@@ -357,7 +347,7 @@ export default function MyPosts() {
                           type="button"
                           onClick={() => handleDealAction(deal, 'accept')}
                           disabled={isBusy}
-                          className="inline-flex items-center gap-1 rounded-full border border-amber-200/35 bg-amber-200/12 px-3 py-1.5 text-xs font-bold text-amber-100 transition hover:bg-amber-200/20 disabled:cursor-not-allowed disabled:opacity-55"
+                          className="inline-flex items-center gap-1 rounded-full border border-cyan-300/28 bg-cyan-300/12 px-3 py-1.5 text-xs font-bold text-cyan-50 transition hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-55"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           Accept
@@ -392,30 +382,41 @@ export default function MyPosts() {
         )}
       </section>
 
-      <h3 className="font-display mb-4 text-xl font-semibold text-amber-50">My Listings</h3>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-display text-xl font-semibold text-white">My Listings</h3>
+          <p className="text-xs text-cyan-50/65">Update availability, prices, or add trust notes for buyers.</p>
+        </div>
+        <span className="rounded-full border border-cyan-300/18 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-50/65">
+          {myItems.length} live
+        </span>
+      </div>
 
       {myItems.length === 0 ? (
-        <div className="glass-panel flex flex-col items-center justify-center rounded-3xl p-8">
-          <PackageOpen className="mb-3 h-12 w-12 text-amber-100/65" />
-          <p className="text-center text-sm text-amber-100/78">You have not posted any items yet.</p>
+        <div className="lux-panel flex flex-col items-center justify-center p-8">
+          <PackageOpen className="mb-3 h-12 w-12 text-cyan-100/65" />
+          <p className="text-center text-sm text-cyan-50/78">You have not posted any items yet.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {myItems.map((item) => {
             const status = item.status || 'active';
             const statusMeta = getStatusMeta(status);
             const isSavingThis = statusSavingId === item.id;
+            const displayPrice = item.price === 0 ? 'Free' : item.price ? `Rs ${item.price}` : 'Price TBD';
+            const displayCategory = 'Books';
 
             return (
-              <article key={item.id} className="glass-panel mb-3 flex items-center justify-between rounded-2xl p-4">
-                <div className="flex items-center gap-4">
+              <article key={item.id} className="lux-panel mb-0 flex items-center justify-between rounded-2xl p-4">
+                <div className="flex min-w-0 items-center gap-4">
                   <img
                     src={item.photoUrl || 'https://via.placeholder.com/50'}
                     alt="item"
-                    className="h-14 w-14 rounded-xl bg-amber-100/20 object-cover"
+                    className="h-14 w-14 rounded-xl bg-cyan-300/12 object-cover"
                   />
-                  <div>
-                    <h3 className="line-clamp-1 font-semibold text-amber-50">{item.title}</h3>
+                  <div className="min-w-0">
+                    <h3 className="line-clamp-1 font-semibold text-white">{item.title}</h3>
+                    <p className="mt-1 text-xs text-cyan-50/68">{displayCategory} | {displayPrice}</p>
                     <p className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusMeta.badgeClass}`}>
                       {statusMeta.label}
                     </p>
@@ -424,7 +425,7 @@ export default function MyPosts() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openEditModal(item)}
-                    className="inline-flex items-center gap-1 rounded-xl border border-amber-200/30 bg-[#171106] px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-200/50 hover:bg-[#211608]"
+                    className="inline-flex items-center gap-1 rounded-xl border border-cyan-300/20 bg-[#08111a]/88 px-3 py-2 text-xs font-semibold text-cyan-50 transition hover:border-cyan-300/38 hover:bg-[#0b1824]"
                     aria-label={`Edit ${item.title}`}
                     title="Edit listing"
                   >
@@ -435,7 +436,7 @@ export default function MyPosts() {
                     value={status}
                     onChange={(event) => handleStatusChange(item.id, event.target.value)}
                     disabled={isSavingThis}
-                    className="rounded-xl border border-amber-200/30 bg-[#171106] px-3 py-2 text-xs font-semibold text-amber-100 outline-none transition focus:border-amber-200/60 disabled:opacity-60"
+                    className="lux-select rounded-xl px-3 py-2 text-xs font-semibold text-cyan-50 disabled:opacity-60"
                     aria-label={`Update status for ${item.title}`}
                   >
                     <option className="text-slate-800" value="active">
@@ -465,16 +466,16 @@ export default function MyPosts() {
 
       {editingItem && (
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/78 p-4 backdrop-blur-md">
-          <form onSubmit={handleEditSubmit} className="glass-panel w-full max-w-2xl rounded-[1.6rem] p-5 sm:p-6">
+          <form onSubmit={handleEditSubmit} className="lux-panel w-full max-w-[920px] p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-amber-100/62">Edit listing</p>
-                <h3 className="font-display mt-1 text-2xl font-semibold text-amber-50">{editingItem.title || 'Listing'}</h3>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-cyan-100/62">Edit listing</p>
+                <h3 className="font-display mt-1 text-2xl font-semibold text-white">{editingItem.title || 'Listing'}</h3>
               </div>
               <button
                 type="button"
                 onClick={closeEditModal}
-                className="rounded-lg border border-amber-200/25 bg-[#171106] p-2 text-amber-100/80 transition hover:border-amber-200/45 hover:text-amber-50"
+                className="rounded-lg border border-cyan-300/20 bg-[#08111a]/88 p-2 text-cyan-50/80 transition hover:border-cyan-300/40 hover:text-white"
                 aria-label="Close edit listing modal"
               >
                 <X className="h-4 w-4" />
@@ -485,86 +486,36 @@ export default function MyPosts() {
               <input
                 type="text"
                 placeholder="Listing title"
-                className="sm:col-span-2 w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                className="lux-input sm:col-span-2"
                 value={editForm.title}
                 onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
               />
 
-              <select
-                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
-                value={editForm.category}
-                onChange={(event) =>
-                  setEditForm((prev) => ({
-                    ...prev,
-                    category: event.target.value,
-                    school: event.target.value === 'Uniforms' ? prev.school : '',
-                    classGrade: event.target.value === 'Books' ? prev.classGrade : '',
-                    subject: event.target.value === 'Books' ? prev.subject : '',
-                    size: event.target.value === 'Uniforms' ? prev.size : '',
-                  }))
-                }
-              >
-                <option className="text-slate-800" value="Books">
-                  Books
-                </option>
-                <option className="text-slate-800" value="Uniforms">
-                  Uniforms
-                </option>
-              </select>
+              <div className="lux-panel-soft flex items-center rounded-xl px-4 py-3 text-sm font-semibold text-cyan-50">
+                Category: Books
+              </div>
 
               <input
                 type="number"
                 min="0"
                 placeholder="Price in Rs"
-                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                className="lux-input"
                 value={editForm.price}
                 onChange={(event) => setEditForm((prev) => ({ ...prev, price: event.target.value }))}
               />
 
-              {editForm.category === 'Uniforms' && (
-                <>
-                  <SchoolSearchInput
-                    id="edit-uniform-school"
-                    required
-                    value={editForm.school}
-                    onChange={(nextSchool) => setEditForm((prev) => ({ ...prev, school: nextSchool }))}
-                    schools={SAHARANPUR_SCHOOLS}
-                    placeholder="Search school"
-                    wrapperClassName="sm:col-span-2"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Size (e.g., 34, M)"
-                    className="sm:col-span-2 w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
-                    value={editForm.size}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, size: event.target.value }))}
-                  />
-                </>
-              )}
-
-              {editForm.category === 'Books' && (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Class / Grade (optional)"
-                    className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
-                    value={editForm.classGrade}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, classGrade: event.target.value }))}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Subject (optional)"
-                    className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
-                    value={editForm.subject}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, subject: event.target.value }))}
-                  />
-                </>
-              )}
+              <input
+                type="text"
+                placeholder="Subject or item detail (optional)"
+                className="lux-input"
+                value={editForm.subject}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, subject: event.target.value }))}
+              />
 
               <input
                 type="text"
                 placeholder="Condition (optional)"
-                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                className="lux-input"
                 value={editForm.condition}
                 onChange={(event) => setEditForm((prev) => ({ ...prev, condition: event.target.value }))}
               />
@@ -572,7 +523,7 @@ export default function MyPosts() {
               <input
                 type="text"
                 placeholder="Tip for buyer (optional)"
-                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                className="lux-input"
                 value={editForm.successNote}
                 onChange={(event) => setEditForm((prev) => ({ ...prev, successNote: event.target.value }))}
               />
@@ -588,7 +539,7 @@ export default function MyPosts() {
               <button
                 type="button"
                 onClick={closeEditModal}
-                className="rounded-xl border border-amber-200/30 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
+                className="rounded-xl border border-cyan-300/22 px-4 py-2.5 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-300/10"
               >
                 Cancel
               </button>
