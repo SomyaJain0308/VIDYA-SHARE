@@ -47,14 +47,24 @@ export default function ProfilePanel({
           <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-amber-200/15 text-amber-100">
             <User className="h-5 w-5" />
           </div>
+          <p className="inline-flex rounded-full border border-amber-200/30 bg-amber-200/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100/86">
+            {userProfile?.role || 'Parent'} account
+          </p>
           <p className="text-sm font-semibold text-amber-50">{userProfile?.primarySchool || 'School not set'}</p>
           <p className="mt-1 text-xs text-amber-100/65">{userProfile?.colony || 'Colony not set'}</p>
           <p className="mt-1 text-xs text-amber-100/65">{userProfile?.contactPhone || userPhone || 'Phone not available'}</p>
           <p className="mt-1 text-xs text-amber-100/65">{userProfile?.email || userEmail || 'Email not available'}</p>
+          {userProfile?.responseSpeed && <p className="mt-1 text-xs text-amber-100/75">Response: {userProfile.responseSpeed}</p>}
           {userProfile?.classFocus && <p className="mt-2 text-xs text-amber-100/75">Classes: {userProfile.classFocus}</p>}
           {userProfile?.preferredMeetup && (
             <p className="mt-1 text-xs text-amber-100/75">Handover: {userProfile.preferredMeetup}</p>
           )}
+          {userProfile?.profileTagline && (
+            <p className="mt-2 rounded-lg border border-amber-200/18 bg-[#120d05] px-3 py-2 text-xs text-amber-100/85">
+              {userProfile.profileTagline}
+            </p>
+          )}
+          <p className="mt-2 text-xs text-emerald-100/85">Successful handovers: {userProfile?.successfulHandovers || 0}</p>
           <p className="mt-3 text-xs text-amber-100/60">Karma points: {userProfile?.karmaPoints || 0}</p>
           {userProfile?.bio && (
             <p className="mt-3 rounded-lg border border-amber-200/20 bg-[#120d05] px-3 py-2 text-xs text-amber-100/78">

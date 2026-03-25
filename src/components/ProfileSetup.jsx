@@ -11,6 +11,9 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
   const [school, setSchool] = useState('');
   const [colony, setColony] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [role, setRole] = useState('Parent');
+  const [responseSpeed, setResponseSpeed] = useState('');
+  const [profileTagline, setProfileTagline] = useState('');
   const [classFocus, setClassFocus] = useState('');
   const [preferredMeetup, setPreferredMeetup] = useState('');
   const [availability, setAvailability] = useState('');
@@ -25,6 +28,9 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     setSchool(initialProfile?.primarySchool || '');
     setColony(initialProfile?.colony || '');
     setContactPhone((initialProfile?.contactPhone || initialProfile?.phone || auth.currentUser?.phoneNumber || '').replace(/\D/g, '').slice(-10));
+    setRole(initialProfile?.role || 'Parent');
+    setResponseSpeed(initialProfile?.responseSpeed || '');
+    setProfileTagline(initialProfile?.profileTagline || '');
     setClassFocus(initialProfile?.classFocus || '');
     setPreferredMeetup(initialProfile?.preferredMeetup || '');
     setAvailability(initialProfile?.availability || '');
@@ -48,6 +54,9 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
       contactPhone: normalizedContactPhone,
       email: auth.currentUser.email || '',
       displayName: cleanName,
+      role: role || 'Parent',
+      responseSpeed: responseSpeed.trim(),
+      profileTagline: profileTagline.trim(),
       primarySchool: normalizeSchoolInput(school),
       colony: colony.trim(),
       classFocus: classFocus.trim(),
@@ -142,6 +151,38 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+          />
+
+          <select
+            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none focus:border-amber-200/45"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option className="text-slate-800" value="Parent">
+              Parent
+            </option>
+            <option className="text-slate-800" value="Student">
+              Student
+            </option>
+            <option className="text-slate-800" value="Guardian">
+              Guardian
+            </option>
+          </select>
+
+          <input
+            type="text"
+            placeholder="Response speed (e.g., Usually within 1 hour)"
+            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+            value={responseSpeed}
+            onChange={(e) => setResponseSpeed(e.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Profile tagline (Optional)"
+            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
+            value={profileTagline}
+            onChange={(e) => setProfileTagline(e.target.value)}
           />
 
           <SchoolSearchInput

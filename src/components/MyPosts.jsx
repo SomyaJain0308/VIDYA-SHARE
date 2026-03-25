@@ -1,20 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, deleteDoc, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, query, where, deleteDoc, doc, getDoc, onSnapshot, updateDoc, serverTimestamp, setDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Trash2, PackageOpen, Loader2, Award, ShieldCheck, Zap, Sparkles } from 'lucide-react';
+import { Trash2, PackageOpen, Loader2, Award, ShieldCheck, Zap, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
+
+const formatRelativeTime = (timestamp) => {
+  if (!timestamp?.toDate) return 'Just now';
+  const seconds = Math.floor((Date.now() - timestamp.toDate().getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+};
 
 export default function MyPosts() {
   const [myItems, setMyItems] = useState([]);
+  const [dealRequests, setDealRequests] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statusSavingId, setStatusSavingId] = useState('');
+  const [dealActionId, setDealActionId] = useState('');
 
   useEffect(() => {
     let unsubscribeItems = () => {};
+    let unsubscribeDeals = () => {};
 
     const fetchDashboardData = async () => {
       if (!auth.currentUser) {
         setMyItems([]);
+        setDealRequests([]);
         setUserProfile(null);
         setLoading(false);
         return;
@@ -25,9 +40,9 @@ export default function MyPosts() {
         const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
         if (userDoc.exists()) setUserProfile(userDoc.data());
 
-        const q = query(collection(db, 'notices'), where('sellerId', '==', auth.currentUser.uid));
+        const itemsQuery = query(collection(db, 'notices'), where('sellerId', '==', auth.currentUser.uid));
         unsubscribeItems = onSnapshot(
-          q,
+          itemsQuery,
           (querySnapshot) => {
             const items = [];
             querySnapshot.forEach((entry) => items.push({ id: entry.id, ...entry.data() }));
@@ -39,6 +54,24 @@ export default function MyPosts() {
             setLoading(false);
           }
         );
+
+        const dealsQuery = query(collection(db, 'dealRequests'), where('sellerId', '==', auth.currentUser.uid));
+        unsubscribeDeals = onSnapshot(
+          dealsQuery,
+          (querySnapshot) => {
+            const deals = [];
+            querySnapshot.forEach((entry) => deals.push({ id: entry.id, ...entry.data() }));
+            deals.sort((a, b) => {
+              const aTime = a.createdAt?.toMillis?.() || 0;
+              const bTime = b.createdAt?.toMillis?.() || 0;
+              return bTime - aTime;
+            });
+            setDealRequests(deals);
+          },
+          (error) => {
+            console.error('Error loading deal requests:', error);
+          }
+        );
       } catch (error) {
         console.error('Error fetching dashboard:', error);
         setLoading(false);
@@ -46,20 +79,25 @@ export default function MyPosts() {
     };
 
     fetchDashboardData();
-    return () => unsubscribeItems();
+    return () => {
+      unsubscribeItems();
+      unsubscribeDeals();
+    };
   }, []);
 
   const handleDelete = async (id) => {
-    if (window.confirm('Has this item been passed on?')) {
-      await deleteDoc(doc(db, 'notices', id));
-      setMyItems(myItems.filter((item) => item.id !== id));
-    }
+    if (!window.confirm('Delete this listing permanently?')) return;
+    await deleteDoc(doc(db, 'notices', id));
+    setMyItems((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleStatusChange = async (id, nextStatus) => {
     try {
       setStatusSavingId(id);
-      await updateDoc(doc(db, 'notices', id), { status: nextStatus });
+      await updateDoc(doc(db, 'notices', id), {
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
+      });
     } catch (error) {
       console.error('Error updating item status:', error);
       alert('Could not update status. Please try again.');
@@ -68,10 +106,75 @@ export default function MyPosts() {
     }
   };
 
+  const handleDealAction = async (deal, action) => {
+    if (!deal?.id) return;
+    try {
+      setDealActionId(deal.id);
+      const dealRef = doc(db, 'dealRequests', deal.id);
+      const noticeRef = doc(db, 'notices', deal.noticeId);
+
+      if (action === 'accept') {
+        await updateDoc(dealRef, {
+          status: 'accepted',
+          acceptedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        await updateDoc(noticeRef, {
+          status: 'reserved',
+          reservedForBuyerId: deal.buyerId || '',
+          reservedForBuyerName: deal.buyerName || '',
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      if (action === 'decline') {
+        await updateDoc(dealRef, {
+          status: 'declined',
+          declinedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      if (action === 'complete') {
+        await updateDoc(dealRef, {
+          status: 'completed',
+          completedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        await updateDoc(noticeRef, {
+          status: 'sold',
+          soldAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        await setDoc(
+          doc(db, 'users', auth.currentUser.uid),
+          {
+            successfulHandovers: increment(1),
+            karmaPoints: increment(5),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+    } catch (error) {
+      console.error('Deal action failed', error);
+      alert('Could not update this pickup request.');
+    } finally {
+      setDealActionId('');
+    }
+  };
+
   const getStatusMeta = (status) => {
     if (status === 'sold') return { label: 'Sold', badgeClass: 'bg-rose-300/85 text-[#4a1b25]' };
     if (status === 'reserved') return { label: 'Reserved', badgeClass: 'bg-amber-200 text-[#3f2a02]' };
     return { label: 'Active', badgeClass: 'bg-emerald-200/90 text-[#153421]' };
+  };
+
+  const getDealStatusMeta = (status) => {
+    if (status === 'accepted') return { label: 'Accepted', className: 'bg-amber-200 text-[#3f2a02]' };
+    if (status === 'completed') return { label: 'Completed', className: 'bg-emerald-200 text-[#153421]' };
+    if (status === 'declined') return { label: 'Declined', className: 'bg-rose-300/85 text-[#4a1b25]' };
+    return { label: 'Pending', className: 'bg-sky-200 text-[#17304a]' };
   };
 
   if (loading) {
@@ -90,6 +193,8 @@ export default function MyPosts() {
         ? { name: 'Trusted Senior', color: 'bg-[#d7c9a3] text-[#2f2107]', icon: <ShieldCheck className="h-4 w-4" /> }
         : { name: 'Neighborhood Helper', color: 'bg-[#c9b37c] text-[#332206]', icon: <Zap className="h-4 w-4" /> };
 
+  const successfulHandovers = userProfile?.successfulHandovers || myItems.filter((item) => (item.status || 'active') === 'sold').length;
+
   return (
     <div className="mx-auto w-full max-w-4xl px-3 pb-14 pt-4 sm:px-6">
       <section className="glass-panel relative mb-5 overflow-hidden rounded-[1.6rem] p-5 sm:p-6">
@@ -107,7 +212,7 @@ export default function MyPosts() {
           {tier.icon} {tier.name}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t border-amber-200/20 pt-4">
+        <div className="grid grid-cols-3 gap-3 border-t border-amber-200/20 pt-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Karma Points</p>
             <p className="font-display text-3xl font-semibold text-amber-100">{karma}</p>
@@ -116,7 +221,93 @@ export default function MyPosts() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Items Shared</p>
             <p className="font-display text-3xl font-semibold text-amber-50">{myItems.length}</p>
           </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/55">Handovers</p>
+            <p className="font-display text-3xl font-semibold text-emerald-200">{successfulHandovers}</p>
+          </div>
         </div>
+      </section>
+
+      <section className="glass-panel mb-5 rounded-[1.6rem] p-5 sm:p-6">
+        <h3 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-amber-50">
+          <ShieldCheck className="h-5 w-5 text-amber-100" />
+          Pickup Requests
+        </h3>
+
+        {dealRequests.length === 0 ? (
+          <p className="text-sm text-amber-100/75">No pickup requests yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {dealRequests.map((deal) => {
+              const statusMeta = getDealStatusMeta(deal.status || 'pending');
+              const isBusy = dealActionId === deal.id;
+
+              return (
+                <article key={deal.id} className="rounded-2xl border border-amber-200/18 bg-[#130d05]/70 p-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="font-semibold text-amber-50">{deal.noticeTitle || 'Listing'}</h4>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.className}`}>{statusMeta.label}</span>
+                  </div>
+
+                  <p className="text-xs text-amber-100/75">
+                    Buyer: <span className="font-semibold text-amber-50">{deal.buyerName || 'Community member'}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-amber-100/75">
+                    Phone: <span className="font-semibold text-amber-50">{deal.buyerPhone || 'Not shared'}</span>
+                  </p>
+                  {deal.preferredMeetup && (
+                    <p className="mt-1 text-xs text-amber-100/75">
+                      Meetup: <span className="font-semibold text-amber-50">{deal.preferredMeetup}</span>
+                    </p>
+                  )}
+                  {deal.preferredTime && (
+                    <p className="mt-1 text-xs text-amber-100/75">
+                      Time: <span className="font-semibold text-amber-50">{deal.preferredTime}</span>
+                    </p>
+                  )}
+                  {deal.note && <p className="mt-2 rounded-lg border border-amber-200/18 bg-[#1a1207] px-3 py-2 text-xs text-amber-100/82">{deal.note}</p>}
+                  <p className="mt-2 text-[11px] text-amber-100/62">{formatRelativeTime(deal.createdAt)}</p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(deal.status || 'pending') === 'pending' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleDealAction(deal, 'accept')}
+                          disabled={isBusy}
+                          className="inline-flex items-center gap-1 rounded-full border border-amber-200/35 bg-amber-200/12 px-3 py-1.5 text-xs font-bold text-amber-100 transition hover:bg-amber-200/20 disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDealAction(deal, 'decline')}
+                          disabled={isBusy}
+                          className="inline-flex items-center gap-1 rounded-full border border-rose-200/35 bg-rose-300/12 px-3 py-1.5 text-xs font-bold text-rose-100 transition hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Decline
+                        </button>
+                      </>
+                    )}
+                    {(deal.status || 'pending') === 'accepted' && (
+                      <button
+                        type="button"
+                        onClick={() => handleDealAction(deal, 'complete')}
+                        disabled={isBusy}
+                        className="inline-flex items-center gap-1 rounded-full border border-emerald-200/35 bg-emerald-200/15 px-3 py-1.5 text-xs font-bold text-emerald-100 transition hover:bg-emerald-200/25 disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Mark sold
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <h3 className="font-display mb-4 text-xl font-semibold text-amber-50">My Listings</h3>
@@ -135,47 +326,47 @@ export default function MyPosts() {
 
             return (
               <article key={item.id} className="glass-panel mb-3 flex items-center justify-between rounded-2xl p-4">
-              <div className="flex items-center gap-4">
-                <img
-                  src={item.photoUrl || 'https://via.placeholder.com/50'}
-                  alt="item"
-                  className="h-14 w-14 rounded-xl bg-amber-100/20 object-cover"
-                />
-                <div>
-                  <h3 className="line-clamp-1 font-semibold text-amber-50">{item.title}</h3>
-                  <p className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusMeta.badgeClass}`}>
-                    {statusMeta.label}
-                  </p>
+                <div className="flex items-center gap-4">
+                  <img
+                    src={item.photoUrl || 'https://via.placeholder.com/50'}
+                    alt="item"
+                    className="h-14 w-14 rounded-xl bg-amber-100/20 object-cover"
+                  />
+                  <div>
+                    <h3 className="line-clamp-1 font-semibold text-amber-50">{item.title}</h3>
+                    <p className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusMeta.badgeClass}`}>
+                      {statusMeta.label}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={status}
-                  onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                  disabled={isSavingThis}
-                  className="rounded-xl border border-amber-200/30 bg-[#171106] px-3 py-2 text-xs font-semibold text-amber-100 outline-none transition focus:border-amber-200/60 disabled:opacity-60"
-                  aria-label={`Update status for ${item.title}`}
-                >
-                  <option className="text-slate-800" value="active">
-                    Active
-                  </option>
-                  <option className="text-slate-800" value="reserved">
-                    Reserved
-                  </option>
-                  <option className="text-slate-800" value="sold">
-                    Sold
-                  </option>
-                </select>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="rounded-xl border border-rose-200/35 bg-transparent p-2.5 text-rose-200 transition hover:bg-rose-300/20"
-                  aria-label="Delete item"
-                  title="Delete permanently"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </article>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={status}
+                    onChange={(event) => handleStatusChange(item.id, event.target.value)}
+                    disabled={isSavingThis}
+                    className="rounded-xl border border-amber-200/30 bg-[#171106] px-3 py-2 text-xs font-semibold text-amber-100 outline-none transition focus:border-amber-200/60 disabled:opacity-60"
+                    aria-label={`Update status for ${item.title}`}
+                  >
+                    <option className="text-slate-800" value="active">
+                      Active
+                    </option>
+                    <option className="text-slate-800" value="reserved">
+                      Reserved
+                    </option>
+                    <option className="text-slate-800" value="sold">
+                      Sold
+                    </option>
+                  </select>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="rounded-xl border border-rose-200/35 bg-transparent p-2.5 text-rose-200 transition hover:bg-rose-300/20"
+                    aria-label="Delete item"
+                    title="Delete permanently"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </article>
             );
           })}
         </div>

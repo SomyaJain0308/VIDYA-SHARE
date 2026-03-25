@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MapPin, Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { generateWhatsAppLink } from '../utils/whatsapp';
 import SchoolSearchInput from './SchoolSearchInput';
 import { SAHARANPUR_SCHOOLS, normalizeSchoolInput } from '../data/schools';
@@ -29,6 +29,13 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
   const [sellerProfiles, setSellerProfiles] = useState({});
   const [activeProfile, setActiveProfile] = useState(null);
   const [featuredBookIndex, setFeaturedBookIndex] = useState(0);
+  const [bookClassFilter, setBookClassFilter] = useState('all');
+  const [bookSubjectFilter, setBookSubjectFilter] = useState('all');
+  const [reserveNotice, setReserveNotice] = useState(null);
+  const [reserveForm, setReserveForm] = useState({ preferredMeetup: '', preferredTime: '', note: '' });
+  const [isReserveSubmitting, setIsReserveSubmitting] = useState(false);
+  const [reserveError, setReserveError] = useState('');
+  const [reservedNoticeIds, setReservedNoticeIds] = useState([]);
 
   const categories = ['All', 'Books', 'Uniforms'];
   const recencyOptions = [
@@ -144,6 +151,69 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
     setSavedOffers((prev) => (prev.includes(noticeId) ? prev.filter((id) => id !== noticeId) : [...prev, noticeId]));
   };
 
+  const openReserveModal = (notice) => {
+    if (!auth.currentUser) {
+      alert('Please sign in to reserve a listing.');
+      return;
+    }
+    if (auth.currentUser.uid === notice.sellerId) {
+      alert('This is your own listing.');
+      return;
+    }
+    setReserveNotice(notice);
+    setReserveError('');
+    setReserveForm({
+      preferredMeetup: userProfile?.preferredMeetup || '',
+      preferredTime: '',
+      note: '',
+    });
+  };
+
+  const closeReserveModal = () => {
+    setReserveNotice(null);
+    setReserveError('');
+    setReserveForm({ preferredMeetup: '', preferredTime: '', note: '' });
+  };
+
+  const submitReserveRequest = async (event) => {
+    event.preventDefault();
+    if (!reserveNotice || !auth.currentUser) return;
+    const buyerPhone = userProfile?.contactPhone || userProfile?.phone || auth.currentUser.phoneNumber || '';
+    if (!buyerPhone) {
+      setReserveError('Add your contact number in profile before sending reserve requests.');
+      return;
+    }
+    setIsReserveSubmitting(true);
+    setReserveError('');
+    try {
+      await addDoc(collection(db, 'dealRequests'), {
+        noticeId: reserveNotice.id,
+        noticeTitle: reserveNotice.title || 'Listing',
+        noticePhotoUrl: reserveNotice.photoUrl || '',
+        sellerId: reserveNotice.sellerId || '',
+        sellerName: reserveNotice.sellerName || '',
+        buyerId: auth.currentUser.uid,
+        buyerName: userProfile?.displayName || auth.currentUser.displayName || 'Community member',
+        buyerPhone,
+        buyerSchool: userProfile?.primarySchool || '',
+        preferredMeetup: reserveForm.preferredMeetup.trim(),
+        preferredTime: reserveForm.preferredTime.trim(),
+        note: reserveForm.note.trim(),
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setReservedNoticeIds((prev) => (prev.includes(reserveNotice.id) ? prev : [...prev, reserveNotice.id]));
+      closeReserveModal();
+      alert('Reserve request sent to seller.');
+    } catch (error) {
+      console.error('Failed to send reserve request', error);
+      setReserveError('Could not send reserve request right now.');
+    } finally {
+      setIsReserveSubmitting(false);
+    }
+  };
+
   const getStatusMeta = (status) => {
     if (status === 'sold') return { label: 'Sold', badgeClass: 'bg-rose-300/90 text-[#4a1b25]' };
     if (status === 'reserved') return { label: 'Reserved', badgeClass: 'bg-amber-200 text-[#3f2a02]' };
@@ -173,11 +243,24 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
     }
     return chips;
   };
+  const sellerStatsMap = (notices || []).reduce((acc, notice) => {
+    if (!notice?.sellerId) return acc;
+    if (!acc[notice.sellerId]) {
+      acc[notice.sellerId] = { total: 0, sold: 0 };
+    }
+    acc[notice.sellerId].total += 1;
+    if ((notice.status || 'active') === 'sold') {
+      acc[notice.sellerId].sold += 1;
+    }
+    return acc;
+  }, {});
+
   const getTrustLine = (notice) => {
     const profile = sellerProfiles[notice.sellerId] || {};
     const hasProfileData = Object.keys(profile).length > 0;
+    const stats = sellerStatsMap[notice.sellerId] || { total: 0, sold: 0 };
     if (!hasProfileData) {
-      return 'Verified account • Profile details pending';
+      return `Verified account | ${stats.sold} handovers`;
     }
     const verifiedPart = profile.isVerifiedParent === false ? 'Unverified profile' : 'Verified profile';
     const visibilityPart = profile.publicProfile === false ? 'Private profile' : 'Public profile';
@@ -190,10 +273,10 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
       profile.bio,
     ].filter((value) => Boolean((value || '').toString().trim())).length;
     const completionPart = completionSignals >= 3 ? 'Profile details added' : 'Basic profile details';
-    return `${verifiedPart} • ${visibilityPart} • ${completionPart}`;
+    return `${verifiedPart} | ${visibilityPart} | ${completionPart} | ${stats.sold} handovers`;
   };
 
-  const sanitizeTrustLine = (value) => (value || '').replaceAll('â€¢', '|').replaceAll('•', '|');
+  const sanitizeTrustLine = (value) => (value || '').replaceAll('Ã¢â‚¬Â¢', '|').replaceAll('â€¢', '|').replaceAll('•', '|');
   const buildGhostWord = (value) => {
     const clean = (value || 'BOOKS').replace(/[^a-z0-9 ]/gi, ' ').trim();
     const firstWord = clean.split(/\s+/)[0] || 'BOOKS';
@@ -253,22 +336,33 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
     });
 
   const bookNotices = processedNotices.filter((notice) => notice.category === 'Books');
+  const bookClassOptions = ['all', ...new Set(bookNotices.map((notice) => (notice.classGrade || '').trim()).filter(Boolean))];
+  const bookSubjectOptions = ['all', ...new Set(bookNotices.map((notice) => (notice.subject || '').trim()).filter(Boolean))];
+  const filteredBookNotices = bookNotices.filter((notice) => {
+    if (bookClassFilter !== 'all' && (notice.classGrade || '').trim() !== bookClassFilter) return false;
+    if (bookSubjectFilter !== 'all' && (notice.subject || '').trim() !== bookSubjectFilter) return false;
+    return true;
+  });
+
   useEffect(() => {
-    if (bookNotices.length === 0) {
+    if (filteredBookNotices.length === 0) {
       setFeaturedBookIndex(0);
       return;
     }
-    setFeaturedBookIndex((prev) => Math.min(prev, bookNotices.length - 1));
-  }, [bookNotices.length]);
+    setFeaturedBookIndex((prev) => Math.min(prev, filteredBookNotices.length - 1));
+  }, [filteredBookNotices.length]);
 
   const isBooksShowcase = categoryFilter !== 'Uniforms';
-  const featuredBook = bookNotices[featuredBookIndex] || null;
+  const featuredBook = filteredBookNotices[featuredBookIndex] || null;
   const featuredStatusMeta = getStatusMeta(featuredBook?.status || 'active');
   const featuredMetadata = featuredBook ? getMetadataChips(featuredBook) : [];
   const featuredTrust = featuredBook ? sanitizeTrustLine(getTrustLine(featuredBook)) : '';
   const featuredSaved = featuredBook ? savedOffers.includes(featuredBook.id) : false;
   const featuredGhostWord = buildGhostWord(featuredBook?.title || 'Books');
-  const featuredCountLabel = bookNotices.length > 0 ? `${String(featuredBookIndex + 1).padStart(2, '0')} / ${String(bookNotices.length).padStart(2, '0')}` : '00 / 00';
+  const featuredCountLabel =
+    filteredBookNotices.length > 0
+      ? `${String(featuredBookIndex + 1).padStart(2, '0')} / ${String(filteredBookNotices.length).padStart(2, '0')}`
+      : '00 / 00';
   const featuredLocationLine = featuredBook?.school
     ? featuredBook.school
     : featuredBook
@@ -277,12 +371,14 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
   const featuredConnectLink = featuredBook
     ? generateWhatsAppLink(featuredBook.sellerPhone || '', featuredBook.title, featuredBook.school, 'EN', featuredBook.successNote)
     : null;
+  const featuredIsSelfListing = !!(featuredBook && auth.currentUser?.uid && featuredBook.sellerId === auth.currentUser.uid);
+  const featuredReserveSent = !!(featuredBook && reservedNoticeIds.includes(featuredBook.id));
   const shiftFeaturedBook = (direction) => {
-    if (bookNotices.length <= 1) return;
+    if (filteredBookNotices.length <= 1) return;
     setFeaturedBookIndex((prev) => {
       const nextIndex = prev + direction;
-      if (nextIndex < 0) return bookNotices.length - 1;
-      if (nextIndex >= bookNotices.length) return 0;
+      if (nextIndex < 0) return filteredBookNotices.length - 1;
+      if (nextIndex >= filteredBookNotices.length) return 0;
       return nextIndex;
     });
   };
@@ -303,6 +399,41 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Verified community
               </div>
+            </div>
+
+            <div className="mb-4 grid gap-2 sm:grid-cols-2">
+              <select
+                value={bookClassFilter}
+                onChange={(e) => setBookClassFilter(e.target.value)}
+                className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+              >
+                <option value="all" className="bg-[#171106]">
+                  All classes
+                </option>
+                {bookClassOptions
+                  .filter((option) => option !== 'all')
+                  .map((option) => (
+                    <option key={option} value={option} className="bg-[#171106]">
+                      Class {option}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value={bookSubjectFilter}
+                onChange={(e) => setBookSubjectFilter(e.target.value)}
+                className="rounded-xl border border-amber-200/20 bg-[#171106]/80 px-3 py-2.5 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+              >
+                <option value="all" className="bg-[#171106]">
+                  All subjects
+                </option>
+                {bookSubjectOptions
+                  .filter((option) => option !== 'all')
+                  .map((option) => (
+                    <option key={option} value={option} className="bg-[#171106]">
+                      {option}
+                    </option>
+                  ))}
+              </select>
             </div>
 
             <div className="book-stage relative overflow-hidden rounded-[1.9rem] border border-amber-200/18 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
@@ -449,6 +580,16 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                         Connect
                       </a>
                     )}
+                    {featuredBook && !featuredIsSelfListing && (
+                      <button
+                        type="button"
+                        onClick={() => openReserveModal(featuredBook)}
+                        disabled={featuredReserveSent}
+                        className="rounded-full border border-amber-200/30 px-5 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        {featuredReserveSent ? 'Reserve Sent' : 'Reserve Pickup'}
+                      </button>
+                    )}
                   </div>
 
                   <div className="order-3 flex items-center justify-between gap-4 lg:justify-end">
@@ -460,7 +601,7 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                       <button
                         type="button"
                         onClick={() => shiftFeaturedBook(-1)}
-                        disabled={bookNotices.length <= 1}
+                        disabled={filteredBookNotices.length <= 1}
                         className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-200/28 bg-[#120c05]/58 text-amber-100 transition hover:border-amber-200/48 hover:bg-[#1e1408]/85 disabled:cursor-not-allowed disabled:opacity-45"
                         aria-label="Previous book"
                       >
@@ -469,7 +610,7 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                       <button
                         type="button"
                         onClick={() => shiftFeaturedBook(1)}
-                        disabled={bookNotices.length <= 1}
+                        disabled={filteredBookNotices.length <= 1}
                         className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-200/28 bg-[#120c05]/58 text-amber-100 transition hover:border-amber-200/48 hover:bg-[#1e1408]/85 disabled:cursor-not-allowed disabled:opacity-45"
                         aria-label="Next book"
                       >
@@ -480,6 +621,40 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                 </div>
               </div>
             </div>
+
+            {filteredBookNotices.length > 0 && (
+              <div className="hide-scrollbar mt-4 flex gap-3 overflow-x-auto pb-1">
+                {filteredBookNotices.slice(0, 10).map((book, index) => {
+                  const isActive = index === featuredBookIndex;
+                  return (
+                    <button
+                      key={book.id}
+                      type="button"
+                      onClick={() => setFeaturedBookIndex(index)}
+                      className={`min-w-[180px] overflow-hidden rounded-2xl border text-left transition ${
+                        isActive
+                          ? 'border-amber-200/60 bg-amber-200/12'
+                          : 'border-amber-200/20 bg-[#130d05]/70 hover:border-amber-200/40'
+                      }`}
+                    >
+                      <div className="h-20 w-full bg-[#100a04]">
+                        {book.photoUrl ? (
+                          <img src={book.photoUrl} alt={book.title} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-xs text-amber-100/65">No cover</div>
+                        )}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="line-clamp-1 text-xs font-semibold text-amber-50">{book.title}</p>
+                        <p className="mt-1 text-[11px] text-amber-100/70">
+                          {Number(book.price || 0) === 0 ? 'Free' : `Rs ${book.price || 0}`}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
           </div>
         </section>
@@ -696,6 +871,9 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
             const metadataChips = getMetadataChips(notice);
             const trustLine = sanitizeTrustLine(getTrustLine(notice));
             const connectLink = generateWhatsAppLink(notice.sellerPhone || '', notice.title, notice.school, 'EN', notice.successNote);
+            const sellerStats = sellerStatsMap[notice.sellerId] || { sold: 0, total: 0 };
+            const isSelfListing = !!(auth.currentUser?.uid && auth.currentUser.uid === notice.sellerId);
+            const reserveSent = reservedNoticeIds.includes(notice.id);
 
             return (
               <article
@@ -772,6 +950,14 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                     Profile
                   </button>
                 </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-amber-200/25 bg-[#1a1207] px-2 py-0.5 text-[10px] font-semibold text-amber-100/84">
+                    {sellerProfiles[notice.sellerId]?.role || 'Parent'}
+                  </span>
+                  <span className="rounded-full border border-emerald-200/30 bg-emerald-200/12 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
+                    {sellerStats.sold} handovers
+                  </span>
+                </div>
                 <p className="mt-1 truncate text-[11px] text-amber-100/65">{trustLine}</p>
               </div>
 
@@ -799,6 +985,16 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                       Connect
                     </a>
                   )}
+                  {!isSelfListing && (
+                    <button
+                      type="button"
+                      onClick={() => openReserveModal(notice)}
+                      disabled={reserveSent}
+                      className="rounded-full border border-amber-200/30 px-3 py-1.5 text-xs font-bold text-amber-100 transition hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-55"
+                    >
+                      {reserveSent ? 'Requested' : 'Reserve'}
+                    </button>
+                  )}
                 </div>
               </div>
             </article>
@@ -806,6 +1002,60 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
           })
         )}
       </div>
+
+      {reserveNotice && (
+        <div className="fixed inset-0 z-[195] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <form onSubmit={submitReserveRequest} className="glass-panel w-full max-w-md rounded-[1.6rem] p-5 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-amber-100/62">Reserve Pickup</p>
+                <h3 className="font-display mt-1 text-2xl font-semibold text-amber-50">{reserveNotice.title}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeReserveModal}
+                className="rounded-lg border border-amber-200/25 bg-[#171106] p-2 text-amber-100/80 transition hover:border-amber-200/45 hover:text-amber-50"
+                aria-label="Close reserve modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Preferred meetup spot"
+                className="w-full rounded-xl border border-amber-200/20 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={reserveForm.preferredMeetup}
+                onChange={(e) => setReserveForm((prev) => ({ ...prev, preferredMeetup: e.target.value }))}
+              />
+              <input
+                type="text"
+                placeholder="Preferred time (e.g., Today 5pm)"
+                className="w-full rounded-xl border border-amber-200/20 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={reserveForm.preferredTime}
+                onChange={(e) => setReserveForm((prev) => ({ ...prev, preferredTime: e.target.value }))}
+              />
+              <textarea
+                rows="3"
+                placeholder="Add a short note (optional)"
+                className="w-full resize-none rounded-xl border border-amber-200/20 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={reserveForm.note}
+                onChange={(e) => setReserveForm((prev) => ({ ...prev, note: e.target.value }))}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isReserveSubmitting}
+              className="btn-primary mt-4 w-full rounded-xl py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {isReserveSubmitting ? 'Sending request...' : 'Send Reserve Request'}
+            </button>
+            {reserveError && <p className="mt-3 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{reserveError}</p>}
+          </form>
+        </div>
+      )}
 
       {activeProfile && (
         <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -829,11 +1079,22 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
 
             <div className="space-y-3 text-sm text-amber-100/86">
               <p>
+                Role: <span className="text-amber-50">{activeProfile.role || 'Parent'}</span>
+              </p>
+              <p>
                 School: <span className="text-amber-50">{activeProfile.primarySchool || activeProfile.fallbackSchool || 'Not shared'}</span>
               </p>
               <p>
                 Colony: <span className="text-amber-50">{activeProfile.colony || 'Not shared'}</span>
               </p>
+              {activeProfile.responseSpeed && (
+                <p>
+                  Response: <span className="text-amber-50">{activeProfile.responseSpeed}</span>
+                </p>
+              )}
+              {activeProfile.profileTagline && (
+                <p className="rounded-xl border border-amber-200/20 bg-[#130e06]/70 p-3 text-amber-100/82">{activeProfile.profileTagline}</p>
+              )}
               {activeProfile.classFocus && (
                 <p>
                   Classes: <span className="text-amber-50">{activeProfile.classFocus}</span>
@@ -857,6 +1118,9 @@ export default function Feed({ notices, userProfile, onStartListing, onOpenReque
                   Contact: <span className="text-amber-50">{activeProfile.phone || activeProfile.phoneFromListing}</span>
                 </p>
               )}
+              <p>
+                Successful handovers: <span className="text-emerald-200">{activeProfile.successfulHandovers || 0}</span>
+              </p>
             </div>
           </div>
         </div>
