@@ -10,6 +10,7 @@ import {
   Mail,
   ArrowLeft,
   Chrome,
+  Apple,
   User2,
   Lock,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   GoogleAuthProvider,
+  OAuthProvider,
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -78,6 +80,23 @@ const getGoogleAuthErrorMessage = (error) => {
     return 'Google sign-in is disabled in Firebase Console. Enable Google in Authentication > Sign-in method.';
   }
   return 'Google sign-in could not complete right now.';
+};
+
+const getAppleAuthErrorMessage = (error) => {
+  const code = error?.code || '';
+  if (code === 'auth/popup-closed-by-user') return 'Apple sign-in was closed before it completed.';
+  if (code === 'auth/popup-blocked') return 'Popup was blocked. Allow popups and try Apple sign-in again.';
+  if (code === 'auth/cancelled-popup-request') return 'Another sign-in attempt is already in progress.';
+  if (code === 'auth/account-exists-with-different-credential') {
+    return 'This email already exists with another sign-in method. Try email sign-in instead.';
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return 'Apple sign-in is disabled in Firebase Console. Enable Apple in Authentication > Sign-in method.';
+  }
+  if (code === 'auth/unauthorized-domain' || code === 'auth/app-not-authorized') {
+    return 'This domain is not authorized for Apple sign-in. Add it in Firebase Authentication > Settings > Authorized domains.';
+  }
+  return 'Apple sign-in could not complete right now.';
 };
 
 export default function AuthModal({ onClose, onSuccess }) {
@@ -267,6 +286,23 @@ export default function AuthModal({ onClose, onSuccess }) {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      const provider = new OAuthProvider('apple.com');
+      provider.addScope('email');
+      provider.addScope('name');
+      await signInWithPopup(auth, provider);
+      finishAuth('Apple account connected');
+    } catch (error) {
+      console.error('Apple auth failed', error);
+      setErrorMessage(getAppleAuthErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleOtpChange = (index, value) => {
     const cleanValue = value.replace(/\D/g, '').slice(-1);
     if (value !== '' && cleanValue === '') return;
@@ -307,7 +343,7 @@ export default function AuthModal({ onClose, onSuccess }) {
         animate={{ y: 0, rotateX: 0 }}
         exit={{ y: '100%', rotateX: 20 }}
         transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-        className="glass-panel relative z-10 w-full max-w-lg overflow-hidden rounded-t-[2rem] p-6 pb-8 sm:rounded-[2rem] sm:p-8"
+        className="glass-panel relative z-10 w-full max-w-lg overflow-hidden rounded-t-[2rem] p-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:rounded-[2rem] sm:p-8"
       >
         <div className="absolute right-5 top-5 sm:right-6 sm:top-6">
           <motion.button
@@ -347,6 +383,16 @@ export default function AuthModal({ onClose, onSuccess }) {
                 >
                   {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
                   Continue with Google
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  disabled={isLoading}
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-amber-200/22 bg-[#171106] px-4 py-4 text-sm font-semibold text-amber-50 transition hover:border-amber-200/42 hover:bg-[#1d1507] disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Apple className="h-5 w-5" />}
+                  Continue with Apple
                 </button>
 
                 <button

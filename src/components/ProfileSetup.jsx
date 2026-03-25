@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Sparkles, Loader2, X } from 'lucide-react';
+import { User, Sparkles, Loader2, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import SchoolSearchInput from './SchoolSearchInput';
@@ -20,6 +20,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
   const [bio, setBio] = useState('');
   const [showPhoneOnProfile, setShowPhoneOnProfile] = useState(false);
   const [publicProfile, setPublicProfile] = useState(true);
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -37,6 +38,15 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     setBio(initialProfile?.bio || '');
     setShowPhoneOnProfile(initialProfile?.showPhoneOnProfile === true);
     setPublicProfile(initialProfile?.publicProfile !== false);
+    setShowAdvancedDetails(
+      Boolean(
+        (initialProfile?.profileTagline || '').trim() ||
+          (initialProfile?.classFocus || '').trim() ||
+          (initialProfile?.preferredMeetup || '').trim() ||
+          (initialProfile?.availability || '').trim() ||
+          (initialProfile?.bio || '').trim()
+      )
+    );
   }, [initialProfile]);
 
   const handleSubmit = async (e) => {
@@ -95,8 +105,8 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
   };
 
   return (
-    <div className="fixed inset-0 z-[210] flex flex-col justify-end sm:items-center sm:justify-center">
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
+    <div className="fixed inset-0 z-[210] flex flex-col justify-end sm:items-center sm:justify-center sm:p-6">
+      <div className="absolute inset-0 bg-black/58 backdrop-blur-[2px]" />
 
       <motion.form
         initial={{ y: '100%' }}
@@ -104,7 +114,8 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 250 }}
         onSubmit={handleSubmit}
-        className="glass-panel relative z-10 w-full max-w-xl rounded-t-[2rem] p-6 sm:rounded-[2rem] sm:p-7"
+        autoComplete="off"
+        className="glass-panel relative z-10 w-full max-w-[1180px] rounded-t-[2rem] p-6 pt-[max(1.15rem,env(safe-area-inset-top))] pb-[max(1.2rem,env(safe-area-inset-bottom))] sm:max-h-[min(94vh,900px)] sm:overflow-y-auto sm:rounded-[2rem] sm:p-7 lg:p-8"
       >
         {onClose && (
           <button
@@ -121,39 +132,57 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
           <User className="h-7 w-7 text-amber-100" />
         </div>
 
-        <h2 className="font-display mb-2 text-3xl font-semibold text-amber-50">Customize your profile</h2>
-        <p className="mb-7 text-sm text-amber-100/74">
+        <h2 className="font-display mb-2 text-3xl font-semibold text-amber-50 lg:text-[2.2rem]">Customize your profile</h2>
+        <p className="mb-6 max-w-2xl text-sm text-amber-100/74">
           Only your name is required. Everything else is optional, and helps buyers trust your listings faster.
         </p>
 
-        <div className="mb-7 grid gap-3.5 sm:grid-cols-2">
+        <div className="mb-5 rounded-2xl border border-amber-200/22 bg-[#130d05]/46 p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3 border-b border-amber-200/14 pb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/68">Public profile card</p>
+            <p className="text-xs text-amber-100/64">Keep details simple and trustworthy</p>
+          </div>
+        <div className="grid gap-3.5 sm:grid-cols-2">
           <input
+            name="display_name"
             type="text"
             placeholder="Your Name"
             required
             autoFocus
+            autoComplete="name"
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
 
           <input
+            name="colony_area"
             type="text"
             placeholder="Colony / Area (Optional)"
+            autoComplete="address-level2"
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
             value={colony}
             onChange={(e) => setColony(e.target.value)}
           />
 
           <input
-            type="tel"
+            name="contact_phone"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]{10}"
             placeholder="WhatsApp / Contact Number (Optional)"
+            autoComplete="new-password"
+            autoCorrect="off"
+            spellCheck={false}
+            data-lpignore="true"
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
           />
 
           <select
+            name="role"
+            autoComplete="off"
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none focus:border-amber-200/45"
             value={role}
             onChange={(e) => setRole(e.target.value)}
@@ -170,19 +199,13 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
           </select>
 
           <input
+            name="response_speed"
             type="text"
-            placeholder="Response speed (e.g., Usually within 1 hour)"
+            placeholder="Response speed (e.g., under 1 hour)"
+            autoComplete="off"
             className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
             value={responseSpeed}
             onChange={(e) => setResponseSpeed(e.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Profile tagline (Optional)"
-            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
-            value={profileTagline}
-            onChange={(e) => setProfileTagline(e.target.value)}
           />
 
           <SchoolSearchInput
@@ -193,39 +216,80 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
             placeholder="Your School (Optional)"
             wrapperClassName="sm:col-span-2"
           />
-
-          <input
-            type="text"
-            placeholder="Classes (e.g., Class 8-10) Optional"
-            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
-            value={classFocus}
-            onChange={(e) => setClassFocus(e.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Preferred Handover Spot (Optional)"
-            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
-            value={preferredMeetup}
-            onChange={(e) => setPreferredMeetup(e.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Availability (Optional)"
-            className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
-            value={availability}
-            onChange={(e) => setAvailability(e.target.value)}
-          />
-
-          <textarea
-            rows="3"
-            placeholder="Short profile bio (Optional)"
-            className="w-full resize-none rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-          />
         </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAdvancedDetails((prev) => !prev)}
+          className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-[#140f05]/85 px-4 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-amber-100/88 transition hover:border-amber-200/45 hover:bg-[#1b1308]"
+        >
+          {showAdvancedDetails ? (
+            <>
+              Hide optional details
+              <ChevronUp className="h-4 w-4" />
+            </>
+          ) : (
+            <>
+              Add more details
+              <ChevronDown className="h-4 w-4" />
+            </>
+          )}
+        </button>
+
+        {showAdvancedDetails && (
+          <div className="mb-6 grid gap-3.5 sm:grid-cols-2">
+            <input
+              name="profile_tagline"
+              type="text"
+              placeholder="Profile tagline (Optional)"
+              autoComplete="off"
+              className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
+              value={profileTagline}
+              onChange={(e) => setProfileTagline(e.target.value)}
+            />
+
+            <input
+              name="class_focus"
+              type="text"
+              placeholder="Classes (e.g., Class 8-10) Optional"
+              autoComplete="off"
+              className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+              value={classFocus}
+              onChange={(e) => setClassFocus(e.target.value)}
+            />
+
+            <input
+              name="preferred_handover"
+              type="text"
+              placeholder="Preferred Handover Spot (Optional)"
+              autoComplete="off"
+              className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+              value={preferredMeetup}
+              onChange={(e) => setPreferredMeetup(e.target.value)}
+            />
+
+            <input
+              name="availability"
+              type="text"
+              placeholder="Availability (Optional)"
+              autoComplete="off"
+              className="w-full rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value)}
+            />
+
+            <textarea
+              name="profile_bio"
+              rows="3"
+              placeholder="Short profile bio (Optional)"
+              autoComplete="off"
+              className="w-full resize-none rounded-xl border border-amber-200/20 bg-[#171106] p-3.5 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45 sm:col-span-2"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="mb-6 space-y-3 rounded-xl border border-amber-200/20 bg-[#140f05]/70 p-4">
           <label className="flex cursor-pointer items-start gap-3 text-sm text-amber-100/85">

@@ -26,7 +26,7 @@ export default function ProfilePanel({
         onClick={onClose}
         aria-label="Close profile panel backdrop"
       />
-      <aside className="surface-panel absolute right-0 top-0 h-full w-full max-w-sm rounded-none border-l border-amber-200/25 p-5 sm:p-6">
+      <aside className="surface-panel absolute right-0 top-0 h-full w-full max-w-sm rounded-none border-l border-amber-200/25 p-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6">
         <div className="mb-6 flex items-start justify-between">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.18em] text-amber-200/70 uppercase">Profile</p>

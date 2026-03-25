@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Home, Search, ShieldAlert, PlusCircle, Package2 } from 'lucide-react';
+import { Home, Search, ShieldAlert, PlusCircle, Package2, Sparkles } from 'lucide-react';
 import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Feed from './components/Feed';
@@ -244,32 +244,45 @@ export default function App() {
   };
 
   const getTopTabClass = (tabKey) =>
-    `rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+    `rounded-full px-5 py-2.5 text-sm font-semibold transition ${
       activeTab === tabKey
-        ? 'bg-amber-300 text-[#2d2007]'
-        : 'text-amber-100/85 hover:bg-amber-100/10 hover:text-amber-50'
+        ? 'bg-amber-200 text-[#2f2208] shadow-[0_16px_28px_-18px_rgba(250,209,110,0.88)]'
+        : 'text-amber-100/82 hover:bg-amber-100/12 hover:text-amber-50'
     }`;
 
   const getMobileTabClass = (tabKey) =>
     `relative flex flex-col items-center justify-center rounded-xl px-3 py-2.5 transition-all ${
       activeTab === tabKey
-        ? 'bg-amber-200/15 text-amber-50 border border-amber-200/35'
-        : 'text-amber-100/70 border border-transparent'
+        ? 'bg-amber-200/24 text-amber-50 border border-amber-200/50 shadow-[0_14px_24px_-18px_rgba(250,209,110,0.75)]'
+        : 'text-amber-100/72 border border-transparent'
     }`;
+
+  const activeTabMeta = {
+    feed: 'Explore live student listings',
+    requests: 'Post what you need and get matched',
+    profile: 'Manage your listings and pickups',
+    admin: 'Moderation and reports console',
+  };
 
   return (
     <GlobalProvider>
-      <div className={`app-shell overflow-hidden ${hasEnteredApp ? 'app-shell-market' : ''}`}>
+      <div className={`app-shell overflow-x-hidden ${hasEnteredApp ? 'app-shell-market' : ''}`}>
         {!hasEnteredApp ? (
           <EntryGateway onChooseList={enterForListing} onChooseFind={enterForFindRequest} onChooseProfile={enterForProfile} />
         ) : (
           <>
             <div className="market-shell relative z-10 min-h-screen">
-              <div className="market-topbar border-b border-amber-300/30 bg-black/55 backdrop-blur">
-                <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-8">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/62">Trusted Student Marketplace</p>
-                    <h1 className="font-display mt-0.5 text-3xl font-semibold text-amber-50">Vidya Share</h1>
+              <div className="market-topbar sticky top-0 z-40 border-b border-amber-300/30 bg-black/45 backdrop-blur-xl">
+                <div className="safe-inline mx-auto flex w-full max-w-[1720px] items-center justify-between gap-3 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="brand-mark hidden h-11 w-11 items-center justify-center rounded-2xl border border-amber-100/45 bg-amber-200/20 text-amber-100 sm:flex">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-100/65">Trusted Student Marketplace</p>
+                      <h1 className="font-display mt-0.5 truncate text-[1.75rem] font-semibold text-amber-50 sm:text-[2rem]">Vidya Share</h1>
+                      <p className="hidden text-[11px] text-amber-100/72 lg:block">{activeTabMeta[activeTab] || activeTabMeta.feed}</p>
+                    </div>
                   </div>
 
                   <nav className="hidden items-center gap-2 lg:flex">
@@ -281,14 +294,14 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={openPostFlow}
-                      className="btn-primary hidden items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold sm:flex"
+                      className="btn-primary hidden items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold md:inline-flex"
                     >
                       <PlusCircle className="h-4 w-4" />
                       New Listing
                     </button>
                     <button
                       onClick={() => setIsProfilePanelOpen(true)}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-amber-200/25 bg-[#1d1506]/85 text-amber-100 transition hover:border-amber-200/45 hover:text-amber-50"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-200/25 bg-[#1d1506]/80 text-amber-100 transition hover:border-amber-200/45 hover:text-amber-50 sm:h-11 sm:w-11"
                       aria-label="Open profile"
                     >
                       <Package2 className="h-5 w-5" />
@@ -305,13 +318,14 @@ export default function App() {
                 </div>
               </div>
 
-              <main className="mx-auto mt-4 w-full max-w-[1500px] px-3 pb-24 pt-5 sm:mt-5 sm:px-8">
+              <main className="market-main safe-inline mx-auto mt-3 w-full max-w-[1700px] pt-4 sm:mt-4">
                 {activeTab === 'feed' && (
                   <Feed
                     notices={notices}
                     userProfile={userProfile}
                     onStartListing={openPostFlow}
                     onOpenRequests={openRequests}
+                    onRequireAuth={() => setShowAuthModal(true)}
                     onConnectClick={(itemId) => handleProtectedAction(() => console.log('Connecting to item', itemId))}
                   />
                 )}
@@ -321,8 +335,8 @@ export default function App() {
               </main>
             </div>
 
-            <div className="fixed inset-x-0 bottom-4 z-40 px-4 lg:hidden">
-              <div className="surface-panel gold-ring mx-auto flex max-w-md items-center justify-between rounded-[1.5rem] px-2 py-2">
+            <div className="safe-inline fixed inset-x-0 bottom-0 z-40 pb-[max(env(safe-area-inset-bottom),0.45rem)] lg:hidden">
+              <div className="surface-panel gold-ring mx-auto flex max-w-md items-center justify-between rounded-[1.4rem] px-2 py-2">
                 <button onClick={() => setActiveTab('feed')} className={getMobileTabClass('feed')} aria-label="Explore listings">
                   <Home className="h-5 w-5" />
                   <span className="mt-0.5 text-[11px] font-semibold">Explore</span>
@@ -391,7 +405,7 @@ export default function App() {
         />
 
         {hasEnteredApp && isPostFlowOpen && (
-          <div className="fixed inset-0 z-[190] flex items-end justify-center bg-black/65 p-3 backdrop-blur-md sm:items-center sm:p-6">
+          <div className="fixed inset-0 z-[190] flex items-end justify-center bg-black/52 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:items-center sm:p-6">
             <PostFlow userProfile={userProfile} onSuccess={() => setIsPostFlowOpen(false)} />
           </div>
         )}
@@ -420,7 +434,7 @@ export default function App() {
         )}
 
         {hasEnteredApp && selectedItem && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/78 p-4 backdrop-blur-md">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/78 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md">
             <div className="surface-panel w-full max-w-lg rounded-[1.7rem] p-6">
               <div className="mb-4 flex items-start justify-between">
                 <h2 className="font-display text-xl font-semibold text-amber-50">Shared Listing</h2>

@@ -49,7 +49,7 @@ export default function SchoolSearchInput({
           required={required}
           autoComplete="off"
           placeholder={placeholder}
-          className="w-full rounded-xl border border-amber-200/20 bg-[#171106] py-3 pl-10 pr-10 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+          className="w-full rounded-xl border border-amber-200/26 bg-[#191208]/72 py-3 pl-10 pr-10 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/40 transition focus:border-amber-200/55 focus:bg-[#21180b]/84"
           value={inputValue}
           onFocus={() => setIsOpen(true)}
           onChange={(event) => {
@@ -79,7 +79,7 @@ export default function SchoolSearchInput({
       </div>
 
       {isOpen && (
-        <div className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-amber-200/30 bg-[#110d06]/96 p-1.5 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.95)] backdrop-blur-md">
+        <div className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-amber-200/34 bg-[#110d06]/86 p-1.5 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.95)] backdrop-blur-sm">
           {filteredSchools.length === 0 ? (
             <p className="px-3 py-2 text-xs text-amber-100/65">No exact match. You can still type your school name manually.</p>
           ) : (
@@ -89,7 +89,7 @@ export default function SchoolSearchInput({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => pickSchool(schoolName)}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-amber-100/88 transition hover:bg-amber-100/10 hover:text-amber-50"
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-amber-100/88 transition hover:bg-amber-100/14 hover:text-amber-50"
               >
                 <span className="pr-3">{schoolName}</span>
                 {normalizeSchoolInput(value) === schoolName && <Check className="h-4 w-4 text-amber-300" />}

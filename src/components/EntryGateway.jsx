@@ -15,11 +15,11 @@ export default function EntryGateway({ onChooseList, onChooseFind, onChooseProfi
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_2%,rgba(255,213,108,0.2),transparent_34%),radial-gradient(circle_at_84%_4%,rgba(255,177,54,0.1),transparent_32%)]" />
 
       <div className="relative z-10">
-        <div className="border-b border-amber-300/25 bg-black/55 px-4 py-2 text-center text-sm font-semibold text-amber-100 sm:px-8">
+        <div className="safe-inline border-b border-amber-300/25 bg-black/55 py-2 text-center text-sm font-semibold text-amber-100">
           Trusted Local Exchange for Saharanpur Families
         </div>
 
-        <header className="mx-auto flex w-full max-w-[1400px] items-center justify-start border-b border-amber-300/40 px-4 py-4 sm:px-8">
+        <header className="safe-inline mx-auto flex w-full max-w-[1700px] items-center justify-start border-b border-amber-300/40 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-300 text-[#2d2007]">
               <Sparkles className="h-5 w-5" />
@@ -31,7 +31,7 @@ export default function EntryGateway({ onChooseList, onChooseFind, onChooseProfi
           </div>
         </header>
 
-        <div className="mx-auto w-full max-w-[1400px] px-4 pb-12 pt-12 sm:px-8 sm:pb-16">
+        <div className="safe-inline mx-auto w-full max-w-[1700px] pb-12 pt-12 sm:pb-16">
           <div className="max-w-5xl">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-100/25 bg-amber-100/10 px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-amber-100 uppercase">
               <ShieldCheck className="h-3.5 w-3.5" />

@@ -241,7 +241,7 @@ export default function Requests({ userProfile, onRequireAuth }) {
   }, [requests, categoryFilter, statusFilter, normalizedSearch, recencyCutoffMs]);
 
   return (
-    <div className="mx-auto w-full max-w-[1380px] px-3 pb-14 pt-4 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1650px] px-1 pb-14 pt-4 sm:px-2 lg:px-4">
       <div className="grid gap-4 xl:grid-cols-[minmax(360px,510px)_minmax(0,1fr)] 2xl:grid-cols-[520px_minmax(0,1fr)]">
         <section className="glass-panel h-fit rounded-[1.6rem] p-5 sm:p-6 xl:sticky xl:top-24">
           <div className="mb-4 flex items-start justify-between gap-3">

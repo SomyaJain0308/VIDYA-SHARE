@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, deleteDoc, doc, getDoc, onSnapshot, updateDoc, serverTimestamp, setDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Trash2, PackageOpen, Loader2, Award, ShieldCheck, Zap, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
+import { Trash2, PackageOpen, Loader2, Award, ShieldCheck, Zap, Sparkles, CheckCircle2, XCircle, PencilLine, X } from 'lucide-react';
+import SchoolSearchInput from './SchoolSearchInput';
+import { SAHARANPUR_SCHOOLS, normalizeSchoolInput } from '../data/schools';
 
 const formatRelativeTime = (timestamp) => {
   if (!timestamp?.toDate) return 'Just now';
@@ -21,6 +23,20 @@ export default function MyPosts() {
   const [loading, setLoading] = useState(true);
   const [statusSavingId, setStatusSavingId] = useState('');
   const [dealActionId, setDealActionId] = useState('');
+  const [editingItem, setEditingItem] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    category: 'Books',
+    school: '',
+    price: '',
+    classGrade: '',
+    subject: '',
+    size: '',
+    condition: '',
+    successNote: '',
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     let unsubscribeItems = () => {};
@@ -89,6 +105,72 @@ export default function MyPosts() {
     if (!window.confirm('Delete this listing permanently?')) return;
     await deleteDoc(doc(db, 'notices', id));
     setMyItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const openEditModal = (item) => {
+    if (!item) return;
+    setEditError('');
+    setEditingItem(item);
+    setEditForm({
+      title: item.title || '',
+      category: item.category || 'Books',
+      school: item.school || '',
+      price: item.price === 0 ? '0' : String(item.price || ''),
+      classGrade: item.classGrade || '',
+      subject: item.subject || '',
+      size: item.size || '',
+      condition: item.condition || '',
+      successNote: item.successNote || '',
+    });
+  };
+
+  const closeEditModal = () => {
+    if (isSavingEdit) return;
+    setEditingItem(null);
+    setEditError('');
+  };
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+    if (!editingItem?.id) return;
+
+    const trimmedTitle = editForm.title.trim();
+    const isUniform = editForm.category === 'Uniforms';
+    const normalizedSchool = normalizeSchoolInput(editForm.school);
+    const priceValue = Number(editForm.price || 0);
+    const cleanPrice = Number.isNaN(priceValue) ? 0 : Math.max(0, priceValue);
+
+    if (!trimmedTitle) {
+      setEditError('Title is required.');
+      return;
+    }
+    if (isUniform && !normalizedSchool) {
+      setEditError('School is required for uniform listings.');
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError('');
+    try {
+      await updateDoc(doc(db, 'notices', editingItem.id), {
+        title: trimmedTitle,
+        category: editForm.category,
+        school: isUniform ? normalizedSchool : '',
+        price: cleanPrice,
+        classGrade: isUniform ? '' : editForm.classGrade.trim(),
+        subject: isUniform ? '' : editForm.subject.trim(),
+        size: isUniform ? editForm.size.trim() : '',
+        condition: editForm.condition.trim(),
+        successNote: editForm.successNote.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Failed to update listing', error);
+      setEditError('Could not save changes right now.');
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const handleStatusChange = async (id, nextStatus) => {
@@ -340,6 +422,15 @@ export default function MyPosts() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEditModal(item)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-amber-200/30 bg-[#171106] px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-200/50 hover:bg-[#211608]"
+                    aria-label={`Edit ${item.title}`}
+                    title="Edit listing"
+                  >
+                    <PencilLine className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
                   <select
                     value={status}
                     onChange={(event) => handleStatusChange(item.id, event.target.value)}
@@ -369,6 +460,148 @@ export default function MyPosts() {
               </article>
             );
           })}
+        </div>
+      )}
+
+      {editingItem && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/78 p-4 backdrop-blur-md">
+          <form onSubmit={handleEditSubmit} className="glass-panel w-full max-w-2xl rounded-[1.6rem] p-5 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-amber-100/62">Edit listing</p>
+                <h3 className="font-display mt-1 text-2xl font-semibold text-amber-50">{editingItem.title || 'Listing'}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="rounded-lg border border-amber-200/25 bg-[#171106] p-2 text-amber-100/80 transition hover:border-amber-200/45 hover:text-amber-50"
+                aria-label="Close edit listing modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                type="text"
+                placeholder="Listing title"
+                className="sm:col-span-2 w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={editForm.title}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+              />
+
+              <select
+                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-100 outline-none focus:border-amber-200/45"
+                value={editForm.category}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    category: event.target.value,
+                    school: event.target.value === 'Uniforms' ? prev.school : '',
+                    classGrade: event.target.value === 'Books' ? prev.classGrade : '',
+                    subject: event.target.value === 'Books' ? prev.subject : '',
+                    size: event.target.value === 'Uniforms' ? prev.size : '',
+                  }))
+                }
+              >
+                <option className="text-slate-800" value="Books">
+                  Books
+                </option>
+                <option className="text-slate-800" value="Uniforms">
+                  Uniforms
+                </option>
+              </select>
+
+              <input
+                type="number"
+                min="0"
+                placeholder="Price in Rs"
+                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={editForm.price}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, price: event.target.value }))}
+              />
+
+              {editForm.category === 'Uniforms' && (
+                <>
+                  <SchoolSearchInput
+                    id="edit-uniform-school"
+                    required
+                    value={editForm.school}
+                    onChange={(nextSchool) => setEditForm((prev) => ({ ...prev, school: nextSchool }))}
+                    schools={SAHARANPUR_SCHOOLS}
+                    placeholder="Search school"
+                    wrapperClassName="sm:col-span-2"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Size (e.g., 34, M)"
+                    className="sm:col-span-2 w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                    value={editForm.size}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, size: event.target.value }))}
+                  />
+                </>
+              )}
+
+              {editForm.category === 'Books' && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Class / Grade (optional)"
+                    className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                    value={editForm.classGrade}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, classGrade: event.target.value }))}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Subject (optional)"
+                    className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                    value={editForm.subject}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, subject: event.target.value }))}
+                  />
+                </>
+              )}
+
+              <input
+                type="text"
+                placeholder="Condition (optional)"
+                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={editForm.condition}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, condition: event.target.value }))}
+              />
+
+              <input
+                type="text"
+                placeholder="Tip for buyer (optional)"
+                className="w-full rounded-xl border border-amber-200/25 bg-[#171106] px-3.5 py-3 text-sm font-medium text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-200/45"
+                value={editForm.successNote}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, successNote: event.target.value }))}
+              />
+            </div>
+
+            {editError && (
+              <p className="mt-3 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">
+                {editError}
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="rounded-xl border border-amber-200/30 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-100/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEdit}
+                className="btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />}
+                {isSavingEdit ? 'Saving changes...' : 'Save changes'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
