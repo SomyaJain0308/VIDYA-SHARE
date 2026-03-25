@@ -1,14 +1,10 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Camera, Loader2, Sparkles, Trash2, ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, getDocs, doc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
 import { sendLocalNotification } from '../utils/notifications';
 import { normalizeText, extractKeywords, isLikelyMatch } from '../utils/matching';
-import { BrandMark } from './BrandLogo';
-
-const ShareCardGenerator = lazy(() => import('./ShareCardGenerator'));
 
 const DEFAULT_FORM_DATA = {
   title: '',
@@ -23,13 +19,13 @@ const DEFAULT_FORM_DATA = {
 
 export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfileSetup }) {
   const UPLOAD_MAX_ATTEMPTS = 2;
-  const UPLOAD_IDLE_TIMEOUT_MS = 20000;
   const UPLOAD_TOTAL_TIMEOUT_MS = 150000;
+  const CLOUDINARY_CLOUD_NAME = 'dj2feiwwh';
+  const CLOUDINARY_UPLOAD_PRESET = 'vidya_preset';
   const [mediaFiles, setMediaFiles] = useState([]);
   const [coverIndex, setCoverIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [postedItem, setPostedItem] = useState(null);
   const [submitError, setSubmitError] = useState('');
   const [draftMessage, setDraftMessage] = useState('');
   const [draftSavedAt, setDraftSavedAt] = useState(null);
@@ -71,7 +67,6 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
   }, [draftStorageKey]);
 
   useEffect(() => {
-    if (postedItem) return;
     const autosaveTimer = window.setTimeout(() => {
       try {
         const savedAt = Date.now();
@@ -95,7 +90,7 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
     }, 420);
 
     return () => window.clearTimeout(autosaveTimer);
-  }, [draftStorageKey, formData, postedItem]);
+  }, [draftStorageKey, formData]);
 
   const clearDraft = () => {
     try {
@@ -175,32 +170,24 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
   const shouldRetryUpload = (error) => {
     const code = (error?.code || '').toLowerCase();
     if (!code) return true;
-    if (code.includes('unauthorized')) return false;
-    if (code.includes('quota-exceeded')) return false;
-    if (code.includes('bucket-not-found')) return false;
-    if (code.includes('project-not-found')) return false;
-    if (code.includes('invalid-checksum')) return false;
+    if (code.includes('400')) return false;
+    if (code.includes('401')) return false;
+    if (code.includes('403')) return false;
     return true;
   };
 
   const mapUploadError = (error) => {
-    const code = error?.code || '';
-    if (code.includes('storage/unauthorized')) {
-      return 'Storage permission denied. Update Firebase Storage rules to allow signed-in uploads.';
+    const code = String(error?.code || '');
+    if (code.includes('401') || code.includes('403')) {
+      return 'Cloudinary upload was denied. Check the upload preset and cloud name.';
     }
-    if (code.includes('storage/quota-exceeded')) {
-      return 'Storage quota is full. Free up space or upgrade your Firebase plan.';
+    if (code.includes('400')) {
+      return 'Cloudinary rejected the image. Check the preset settings and file type.';
     }
-    if (code.includes('storage/bucket-not-found') || code.includes('storage/project-not-found')) {
-      return 'Storage bucket is not configured. Check your Firebase project and bucket settings.';
-    }
-    if (code.includes('storage/canceled') && (error?.message || '').includes('stalled')) {
-      return 'Upload stalled. Check internet or Firebase Storage CORS/rules and try again.';
-    }
-    if ((error?.message || '').toLowerCase().includes('timeout')) {
+    if ((error?.message || '').toLowerCase().includes('timeout') || code.includes('timeout')) {
       return 'Upload timed out. Please try again with a stable connection.';
     }
-    return 'Upload failed. Please check your internet and Firebase Storage setup, then try again.';
+    return 'Upload failed. Please check your internet or Cloudinary setup, then try again.';
   };
 
   const pingMatchingRequesters = async ({ noticeId, noticeText, noticeKeywords }) => {
@@ -242,70 +229,48 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
 
   const runUploadAttempt = (imageFile, imageIndex, totalImages, attempt) =>
     new Promise((resolve, reject) => {
-      const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${auth.currentUser.uid}-${Date.now()}-${imageIndex}-a${attempt}.${fileExt}`;
-      const storageRef = ref(storage, `items/${fileName}`);
-      const uploadTask = uploadBytesResumable(storageRef, imageFile);
-      let settled = false;
-      let idleTimer;
-      let totalTimer;
-
-      const clearTimers = () => {
-        if (idleTimer) clearTimeout(idleTimer);
-        if (totalTimer) clearTimeout(totalTimer);
-      };
-
-      const fail = (error) => {
-        if (settled) return;
-        settled = true;
-        clearTimers();
-        reject(error);
-      };
-
-      const resetIdleTimer = () => {
-        if (idleTimer) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          try {
-            uploadTask.cancel();
-          } catch (cancelError) {
-            console.warn('Upload cancel failed after idle timeout', cancelError);
-          }
-          fail(new Error('Upload stalled for too long.'));
-        }, UPLOAD_IDLE_TIMEOUT_MS);
-      };
-
-      totalTimer = setTimeout(() => {
-        try {
-          uploadTask.cancel();
-        } catch (cancelError) {
-          console.warn('Upload cancel failed after total timeout', cancelError);
-        }
-        fail(new Error('Upload timeout exceeded.'));
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => {
+        controller.abort();
       }, UPLOAD_TOTAL_TIMEOUT_MS);
 
-      resetIdleTimer();
+      const formData = new FormData();
+      formData.append('file', imageFile);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      formData.append('folder', 'vidya-share/books');
+      formData.append('public_id', `${auth.currentUser.uid}-${Date.now()}-${imageIndex}-a${attempt}`);
 
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          resetIdleTimer();
-          const singleProgress = snapshot.totalBytes ? snapshot.bytesTransferred / snapshot.totalBytes : 0;
-          const overall = ((imageIndex + singleProgress) / totalImages) * 100;
-          setUploadProgress(overall);
-        },
-        (error) => fail(error),
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            if (settled) return;
-            settled = true;
-            clearTimers();
-            resolve(downloadURL);
-          } catch (error) {
-            fail(error);
+      const baseProgress = (imageIndex / totalImages) * 100;
+      const inFlightProgress = ((imageIndex + 0.7) / totalImages) * 100;
+      setUploadProgress(baseProgress);
+
+      fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload?.secure_url) {
+            const error = new Error(payload?.error?.message || 'Cloudinary upload failed.');
+            error.code = String(response.status || '');
+            throw error;
           }
-        }
-      );
+          setUploadProgress(inFlightProgress);
+          resolve(payload.secure_url);
+        })
+        .catch((error) => {
+          if (error?.name === 'AbortError') {
+            const timeoutError = new Error('Upload timeout exceeded.');
+            timeoutError.code = 'timeout';
+            reject(timeoutError);
+            return;
+          }
+          reject(error);
+        })
+        .finally(() => {
+          window.clearTimeout(timeoutId);
+        });
     });
 
   const uploadSingleImage = async (imageFile, imageIndex, totalImages) => {
@@ -396,15 +361,7 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
         createdAt: serverTimestamp(),
       });
 
-      setIsSubmitting(false);
       triggerSuccess();
-      setPostedItem({
-        id: newDoc.id,
-        ...cleanFormData,
-        img: coverPhotoUrl,
-        photoUrl: coverPhotoUrl,
-        photoUrls: uploadedUrls,
-      });
       try {
         localStorage.removeItem(draftStorageKey);
       } catch (error) {
@@ -417,6 +374,8 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
         noticeText,
         noticeKeywords,
       });
+      setIsSubmitting(false);
+      onSuccess();
     } catch (error) {
       console.error('Error posting', error);
       setSubmitError(mapUploadError(error));
@@ -425,29 +384,10 @@ export default function PostFlow({ userProfile, onSuccess, onClose, onOpenProfil
     }
   };
 
-  if (postedItem) {
-    return (
-      <div className="glass-panel w-full max-w-[1100px] rounded-[2rem] p-6 sm:p-7">
-        <Suspense
-          fallback={
-            <div className="lux-panel rounded-[1.6rem] px-6 py-4 text-sm font-semibold text-cyan-50/82">
-              Preparing share card...
-            </div>
-          }
-        >
-          <ShareCardGenerator item={postedItem} onDone={onSuccess} />
-        </Suspense>
-      </div>
-    );
-  }
-
   const fieldClass = 'lux-input text-sm font-medium';
   const selectClass = 'lux-select text-sm font-medium';
   const textareaClass = 'lux-textarea text-sm font-medium';
   const panelClass = 'lux-panel p-4 sm:p-5';
-  const modeLabel = 'Books listing';
-  const modeHint =
-    'Add strong photos, keep the title easy to recognize, and make the book feel trustworthy at first glance.';
   const progressWidth = `${Math.max(0, Math.min(100, Math.round(uploadProgress)))}%`;
   const draftTimeLabel = draftSavedAt
     ? new Date(draftSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

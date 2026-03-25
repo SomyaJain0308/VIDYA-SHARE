@@ -4,11 +4,11 @@ import { AlertTriangle, RotateCw } from 'lucide-react';
 export default class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, errorMessage: '' };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMessage: error?.message || 'Unknown render error' };
   }
 
   componentDidCatch(error, info) {
@@ -32,6 +32,9 @@ export default class AppErrorBoundary extends React.Component {
             <h2 className="font-display mt-4 text-2xl font-semibold text-white">Something went wrong</h2>
             <p className="mt-2 text-sm leading-relaxed text-cyan-50/72">
               The app hit a loading error on this device. Reload once to recover the latest version.
+            </p>
+            <p className="mt-3 break-words rounded-xl border border-cyan-300/14 bg-white/[0.03] px-3 py-2 text-left text-xs text-cyan-50/66">
+              {this.state.errorMessage}
             </p>
             <button
               type="button"

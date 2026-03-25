@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, Loader2, Search } from 'lucide-react';
+import { Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { generateWhatsAppLink } from '../utils/whatsapp';
@@ -7,7 +7,14 @@ import { normalizeSchoolInput } from '../data/schools';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Just now';
-  const seconds = Math.floor((new Date() - timestamp.toDate()) / 1000);
+  const timestampDate =
+    typeof timestamp?.toDate === 'function'
+      ? timestamp.toDate()
+      : timestamp instanceof Date
+        ? timestamp
+        : null;
+  if (!timestampDate || Number.isNaN(timestampDate.getTime?.())) return 'Just now';
+  const seconds = Math.floor((new Date() - timestampDate) / 1000);
   if (seconds < 60) return 'Just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;

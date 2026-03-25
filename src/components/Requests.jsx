@@ -17,8 +17,14 @@ const includesToken = (sourceValue, targetValue) => {
 };
 
 const formatRequestTime = (timestamp) => {
-  if (!timestamp?.toDate) return 'Just now';
-  const seconds = Math.floor((Date.now() - timestamp.toDate().getTime()) / 1000);
+  const timestampDate =
+    typeof timestamp?.toDate === 'function'
+      ? timestamp.toDate()
+      : timestamp instanceof Date
+        ? timestamp
+        : null;
+  if (!timestampDate || Number.isNaN(timestampDate.getTime?.())) return 'Just now';
+  const seconds = Math.floor((Date.now() - timestampDate.getTime()) / 1000);
   if (seconds < 60) return 'Just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
