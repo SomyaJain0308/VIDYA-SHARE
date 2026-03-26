@@ -21,10 +21,36 @@ export default function SchoolSearchInput({
 
   const filteredSchools = useMemo(() => {
     const normalizedQuery = normalizeSchoolInput(inputValue).toLowerCase();
-    if (!normalizedQuery) return schools.slice(0, 12);
+    if (!normalizedQuery) return schools.slice(0, 10);
+
+    const queryParts = normalizedQuery.split(' ').filter(Boolean);
+
+    const scoreSchool = (schoolName) => {
+      const normalizedSchool = schoolName.toLowerCase();
+      if (normalizedSchool === normalizedQuery) return 1000;
+      if (normalizedSchool.startsWith(normalizedQuery)) return 800;
+      if (normalizedSchool.includes(` ${normalizedQuery}`)) return 700;
+
+      let score = 0;
+      queryParts.forEach((part) => {
+        if (normalizedSchool.startsWith(part)) {
+          score += 160;
+        } else if (normalizedSchool.includes(` ${part}`)) {
+          score += 120;
+        } else if (normalizedSchool.includes(part)) {
+          score += 70;
+        }
+      });
+
+      return score;
+    };
+
     return schools
-      .filter((school) => school.toLowerCase().includes(normalizedQuery))
-      .slice(0, 14);
+      .map((school) => ({ school, score: scoreSchool(school) }))
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score || left.school.localeCompare(right.school))
+      .slice(0, 14)
+      .map((entry) => entry.school);
   }, [inputValue, schools]);
 
   const pickSchool = (schoolName) => {
@@ -45,11 +71,12 @@ export default function SchoolSearchInput({
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-100/62" />
         <input
           id={id}
+          name={id}
           type="text"
           required={required}
           autoComplete="off"
           placeholder={placeholder}
-          className="lux-input py-3 pl-10 pr-10 text-sm font-medium"
+          className="lux-input py-3 pl-12 pr-10 text-sm font-medium"
           value={inputValue}
           onFocus={() => setIsOpen(true)}
           onChange={(event) => {

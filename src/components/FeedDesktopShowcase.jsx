@@ -183,7 +183,7 @@ export default function FeedDesktopShowcase({
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-50/54">Offer Price</p>
                       <div className="mt-2 flex flex-wrap items-end gap-4">
                         <p className="font-display text-3xl font-semibold text-cyan-100 sm:text-4xl lg:text-[3rem]">
-                          {featuredBook ? (Number(featuredBook.price) === 0 ? 'Free' : `Rs ${featuredBook.price}`) : 'Coming Soon'}
+                          {featuredBook ? (Number(featuredBook.price) === 0 ? 'Free' : `₹${featuredBook.price}`) : 'Coming Soon'}
                         </p>
                         {featuredMetadata.length > 0 && (
                           <div className="flex flex-wrap gap-2 pb-1">
@@ -356,13 +356,13 @@ export default function FeedDesktopShowcase({
                           <div className="flex h-full items-center justify-center text-xs text-cyan-50/65">No cover</div>
                         )}
                         <span className="absolute bottom-2 left-2 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-cyan-50">
-                          {Number(book.price || 0) === 0 ? 'Free' : `Rs ${book.price || 0}`}
+                          {Number(book.price || 0) === 0 ? 'Free' : `₹${book.price || 0}`}
                         </span>
                       </div>
                       <div className="p-3">
                         <p className="line-clamp-1 text-xs font-semibold text-white">{book.title}</p>
                         <p className="mt-1 text-[11px] text-cyan-50/68">
-                          {book.subject || book.school || 'Lucknow listing'}
+                          {book.subject || book.school || 'Saharanpur listing'}
                         </p>
                       </div>
                     </button>

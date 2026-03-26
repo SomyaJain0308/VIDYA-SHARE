@@ -3,7 +3,13 @@ import React from 'react';
 export function BrandMark({ className = 'h-12 w-12', alt = 'Vidya Share logo', imgClassName = '' }) {
   return (
     <span className={`brand-mark inline-flex shrink-0 overflow-hidden rounded-[1.15rem] ${className}`}>
-      <img src="/icon.svg" alt={alt} className={`h-full w-full object-cover ${imgClassName}`} />
+      <img
+        src="/icon.svg"
+        alt={alt}
+        className={`h-full w-full object-cover ${imgClassName}`}
+        decoding="async"
+        fetchPriority="high"
+      />
     </span>
   );
 }

@@ -1,0 +1,870 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function nonEmptyString(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
+    }
+
+    function optionalString(value, max) {
+      return value is string && value.size() <= max;
+    }
+
+    function queryLimitWithin(maxItems) {
+      return request.query.limit == null || request.query.limit <= maxItems;
+    }
+
+    function validPhone(value) {
+      return value is string && value.matches('^[0-9]{10}$');
+    }
+
+    function validEmail(value) {
+      return value is string
+        && value.size() <= 254
+        && value.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+    }
+
+    function validSellerRole(value) {
+      return value is string && value in ['Parent', 'Student', 'Guardian'];
+    }
+
+    function validPrice(value) {
+      return value is number && value >= 0 && value <= 100000;
+    }
+
+    function validRequestBudget(value) {
+      return value is number && value >= 0 && value <= 100000;
+    }
+
+    function basicSellerVerificationReady(data) {
+      return validPhone(data.contactPhone)
+        && nonEmptyString(data.city, 2, 80)
+        && nonEmptyString(data.state, 2, 80)
+        && validEmail(data.email)
+        && data.sellerContactConsent == true
+        && data.sellerRulesAccepted == true;
+    }
+
+    function validUserDocument(data) {
+      return nonEmptyString(data.displayName, 2, 80)
+        && optionalString(data.legalName, 120)
+        && nonEmptyString(data.role, 2, 40)
+        && optionalString(data.accountAccessMode, 40)
+        && optionalString(data.responseSpeed, 80)
+        && optionalString(data.profileTagline, 120)
+        && optionalString(data.primarySchool, 140)
+        && optionalString(data.colony, 80)
+        && optionalString(data.city, 80)
+        && optionalString(data.state, 80)
+        && optionalString(data.preferredMeetup, 120)
+        && optionalString(data.availability, 120)
+        && optionalString(data.bio, 500)
+        && data.publicProfile is bool
+        && data.showPhoneOnProfile is bool
+        && data.sellerContactConsent is bool
+        && data.sellerRulesAccepted is bool
+        && data.phone is string
+        && (data.phone == '' || validPhone(data.phone))
+        && data.contactPhone is string
+        && (data.contactPhone == '' || validPhone(data.contactPhone))
+        && data.email is string
+        && (data.email == '' || validEmail(data.email))
+        && data.basicSellerVerificationCompleted is bool
+        && data.basicSellerVerificationCompleted == basicSellerVerificationReady(data)
+        && data.sellerVerificationStatus is string
+        && data.sellerVerificationStatus == (basicSellerVerificationReady(data) ? 'basic-self-declared' : 'pending')
+        && optionalString(data.policyAcceptedVersion, 32)
+        && (data.policyAcceptedAt is string || data.policyAcceptedAt is timestamp)
+        && data.updatedAt is timestamp
+        && (data.createdAt == null || data.createdAt is timestamp);
+    }
+
+    function validPublicProfileDocument(data) {
+      return nonEmptyString(data.displayName, 2, 80)
+        && optionalString(data.primarySchool, 140)
+        && data.publicProfile is bool
+        && (data.publicProfile == true || data.primarySchool == '')
+        && validSellerRole(data.sellerRole)
+        && data.sellerContactConsent is bool
+        && data.basicSellerVerificationCompleted is bool
+        && data.sellerVerificationStatus in ['pending', 'basic-self-declared']
+        && data.updatedAt is timestamp
+        && (data.createdAt == null || data.createdAt is timestamp);
+    }
+
+    function validPrivateContactDocument(data) {
+      return data.contactPhone is string
+        && (data.contactPhone == '' || validPhone(data.contactPhone))
+        && data.email is string
+        && (data.email == '' || validEmail(data.email))
+        && data.contactRevealEnabled is bool
+        && data.revealPhone is bool
+        && (data.revealPhone == false || data.contactPhone != '')
+        && data.updatedAt is timestamp
+        && (data.createdAt == null || data.createdAt is timestamp)
+        && (data.contactPhone != '' || data.email != '');
+    }
+
+    function validContactRevealEvent(data, sellerId, viewerId) {
+      return data.sellerId == sellerId
+        && data.viewerId == viewerId
+        && nonEmptyString(data.noticeId, 1, 128)
+        && optionalString(data.noticeTitle, 120)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validPublicListingDocument(data) {
+      return data.category == 'Books'
+        && data.listingType in ['single', 'set']
+        && nonEmptyString(data.title, 3, 120)
+        && nonEmptyString(data.description, 20, 1500)
+        && validPrice(data.price)
+        && optionalString(data.successNote, 240)
+        && optionalString(data.subject, 80)
+        && optionalString(data.classGrade, 80)
+        && optionalString(data.colony, 80)
+        && (
+          data.condition == ''
+          || data.condition in ['New', 'Like New', 'Good', 'Fair', 'Needs Repair']
+        )
+        && nonEmptyString(data.sellerId, 1, 128)
+        && nonEmptyString(data.sellerName, 2, 80)
+        && validSellerRole(data.sellerRole)
+        && optionalString(data.sellerSchool, 140)
+        && data.sellerVerificationStatus in ['pending', 'basic-self-declared']
+        && data.sellerContactConsent is bool
+        && (
+          (data.status == 'draft' && data.photoUrl == '')
+          || nonEmptyString(data.photoUrl, 10, 2000)
+        )
+        && data.photoUrls is list
+        && (
+          (data.status == 'draft' && data.photoUrls.size() == 0)
+          || data.photoUrls.size() >= 1
+        )
+      && data.photoUrls.size() <= 2
+        && data.photoPaths is list
+        && data.photoPaths.size() == data.photoUrls.size()
+      && data.photoPaths.size() <= 2
+        && data.imageCount is int
+        && data.imageCount == data.photoUrls.size()
+        && (
+          (data.status == 'draft' && data.imageCount == 0)
+          || data.imageCount >= 1
+        )
+      && data.imageCount <= 2
+        && data.status in ['draft', 'active', 'reserved', 'sold']
+        && data.createdAt is timestamp
+        && (data.updatedAt == null || data.updatedAt is timestamp);
+    }
+
+    function publicListingPath(listingId) {
+      return /databases/$(database)/documents/publicListings/$(listingId);
+    }
+
+    function publicListingExists(listingId) {
+      return exists(publicListingPath(listingId));
+    }
+
+    function publicListingData(listingId) {
+      return get(publicListingPath(listingId)).data;
+    }
+
+    function publicFeedQuery() {
+      return queryLimitWithin(24)
+        && request.query.orderBy.size() == 1
+        && request.query.orderBy[0].field == 'createdAt'
+        && request.query.orderBy[0].dir == 'DESCENDING'
+        && request.query.where.size() == 1
+        && request.query.where[0].field == 'status'
+        && request.query.where[0].op == '=='
+        && request.query.where[0].value == 'active';
+    }
+
+    function ownListingsQuery() {
+      return signedIn()
+        && queryLimitWithin(60)
+        && request.query.orderBy.size() == 1
+        && request.query.orderBy[0].field == 'createdAt'
+        && request.query.orderBy[0].dir == 'DESCENDING'
+        && request.query.where.size() == 1
+        && request.query.where[0].field == 'sellerId'
+        && request.query.where[0].op == '=='
+        && request.query.where[0].value == request.auth.uid;
+    }
+
+    function sellerProfileExists(sellerId) {
+      return exists(/databases/$(database)/documents/users/$(sellerId));
+    }
+
+    function sellerVerificationStatusMatchesProfile(data) {
+      return sellerProfileExists(data.sellerId)
+        && data.sellerVerificationStatus == get(/databases/$(database)/documents/users/$(data.sellerId)).data.sellerVerificationStatus;
+    }
+
+    function validRequestDocument(data) {
+      return nonEmptyString(data.text, 3, 280)
+        && nonEmptyString(data.normalizedText, 3, 280)
+        && data.keywords is list
+        && data.keywords.size() >= 1
+        && data.keywords.size() <= 24
+        && data.category == 'Books'
+        && optionalString(data.subject, 80)
+        && optionalString(data.school, 140)
+        && validRequestBudget(data.budget)
+        && data.urgency in ['Anytime', 'This week', 'Urgent']
+        && data.requesterId is string
+        && nonEmptyString(data.requesterName, 2, 80)
+        && optionalString(data.requesterSchool, 140)
+        && data.status in ['open', 'matched', 'closed']
+        && data.matchedCount is int
+        && data.matchedCount >= 0
+        && data.matchedCount <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validRequestCreate(data) {
+      return data.requesterId == request.auth.uid
+        && data.status == 'open'
+        && data.matchedCount == 0
+        && data.createdAt == data.updatedAt
+        && validRequestDocument(data)
+        && actionRateLimitCommitted('listing_request', data.updatedAt);
+    }
+
+    function validRequestStatusTransition() {
+      return (
+        resource.data.status == 'open'
+        && request.resource.data.status in ['open', 'matched', 'closed']
+      ) || (
+        resource.data.status == 'matched'
+        && request.resource.data.status in ['matched', 'closed']
+      ) || (
+        resource.data.status == 'closed'
+        && request.resource.data.status == 'closed'
+      );
+    }
+
+    function validSavedOffer(data, savedOfferId) {
+      return data.userId == request.auth.uid
+        && savedOfferId == (request.auth.uid + '_' + data.noticeId)
+        && nonEmptyString(data.noticeId, 1, 128)
+        && data.createdAt is timestamp
+        && publicListingExists(data.noticeId);
+    }
+
+    function validReportDocument(data, reporterId) {
+      return data.reporterId == reporterId
+        && nonEmptyString(data.reportedItemId, 1, 128)
+        && nonEmptyString(data.sellerId, 1, 128)
+        && nonEmptyString(data.reason, 3, 80)
+        && optionalString(data.details, 280)
+        && optionalString(data.noticeTitle, 120)
+        && optionalString(data.reporterName, 80)
+        && optionalString(data.sellerName, 80)
+        && optionalString(data.adminNotes, 280)
+        && data.status in ['open', 'reviewing', 'resolved', 'actioned']
+        && data.severity in ['low', 'medium', 'high']
+        && data.reportedAt is timestamp
+        && data.updatedAt is timestamp
+        && (data.resolvedAt == null || data.resolvedAt is timestamp)
+        && publicListingExists(data.reportedItemId)
+        && data.sellerId == publicListingData(data.reportedItemId).sellerId;
+    }
+
+    function validAlertDocument(data) {
+      return data.recipientId is string
+        && data.read is bool
+        && nonEmptyString(data.type, 3, 40)
+        && nonEmptyString(data.title, 3, 80)
+        && nonEmptyString(data.body, 3, 240)
+        && data.createdAt is timestamp
+        && (data.readAt == null || data.readAt is timestamp)
+        && optionalString(data.noticeId, 128)
+        && optionalString(data.requestId, 128)
+        && optionalString(data.createdById, 128);
+    }
+
+    function validActionRateLimitAction(action) {
+      return action in ['reserve_request', 'listing_request'];
+    }
+
+    function actionRateLimitMax(action) {
+      return action == 'reserve_request' ? 3 : 1;
+    }
+
+    function validActionRateLimitDocument(data, rateLimitId) {
+      return validActionRateLimitAction(data.action)
+        && rateLimitId == (data.action + '_' + request.auth.uid)
+        && data.userId == request.auth.uid
+        && data.count is int
+        && data.count >= 1
+        && data.count <= actionRateLimitMax(data.action)
+        && data.maxActions is int
+        && data.maxActions == actionRateLimitMax(data.action)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.windowStartedAt is timestamp;
+    }
+
+    function actionRateLimitCommitted(action, expectedUpdatedAt) {
+      return validActionRateLimitDocument(
+          getAfter(/databases/$(database)/documents/actionRateLimits/$(action + '_' + request.auth.uid)).data,
+          action + '_' + request.auth.uid
+        )
+        && getAfter(/databases/$(database)/documents/actionRateLimits/$(action + '_' + request.auth.uid)).data.updatedAt == expectedUpdatedAt;
+    }
+
+    function validDealRequest(data, dealId) {
+      return data.buyerId == request.auth.uid
+        && dealId == (data.noticeId + '_' + data.buyerId)
+        && nonEmptyString(data.noticeId, 1, 128)
+        && nonEmptyString(data.noticeTitle, 2, 120)
+        && optionalString(data.noticePhotoUrl, 2000)
+        && nonEmptyString(data.sellerId, 1, 128)
+        && nonEmptyString(data.sellerName, 2, 80)
+        && nonEmptyString(data.buyerName, 2, 80)
+        && validPhone(data.buyerPhone)
+        && optionalString(data.buyerSchool, 140)
+        && optionalString(data.preferredMeetup, 120)
+        && optionalString(data.preferredTime, 80)
+        && optionalString(data.note, 280)
+        && data.status == 'pending'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.createdAt == data.updatedAt
+        && publicListingExists(data.noticeId)
+        && publicListingData(data.noticeId).sellerId == data.sellerId
+        && publicListingData(data.noticeId).sellerName == data.sellerName
+        && publicListingData(data.noticeId).title == data.noticeTitle
+        && publicListingData(data.noticeId).photoUrl == data.noticePhotoUrl
+        && publicListingData(data.noticeId).status == 'active'
+        && data.sellerId != request.auth.uid
+        && actionRateLimitCommitted('reserve_request', data.updatedAt);
+    }
+
+    function dealParticipantsCanRead() {
+      return resource.data.sellerId == request.auth.uid || resource.data.buyerId == request.auth.uid;
+    }
+
+    function validConversationParticipants(data) {
+      return data.participants is list
+        && data.participants.size() == 2
+        && data.participants[0] is string
+        && data.participants[1] is string
+        && nonEmptyString(data.participants[0], 1, 128)
+        && nonEmptyString(data.participants[1], 1, 128)
+        && data.participants[0] != data.participants[1];
+    }
+
+    function conversationParticipantFromData(data) {
+      return signedIn()
+        && data.participants is list
+        && data.participants.hasAny([request.auth.uid]);
+    }
+
+    function conversationParticipant(conversationId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/conversations/$(conversationId))
+        && get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants.hasAny([request.auth.uid]);
+    }
+
+    function validConversationBase(data, conversationId) {
+      return validConversationParticipants(data)
+        && conversationId == (data.listingId + '_' + data.participants[0] + '_' + data.participants[1])
+        && nonEmptyString(data.listingId, 1, 128)
+        && nonEmptyString(data.listingTitle, 2, 120)
+        && optionalString(data.lastMessage, 240)
+        && data.lastMessageSenderId is string
+        && data.participants.hasAny([data.lastMessageSenderId])
+        && data.lastMessageAt is timestamp;
+    }
+
+    function validConversationCreate(data, conversationId) {
+      return validConversationBase(data, conversationId)
+        && data.participants[0] == request.auth.uid
+        && data.lastMessageSenderId == request.auth.uid
+        && data.lastMessageAt == request.time
+        && exists(/databases/$(database)/documents/publicListings/$(data.listingId))
+        && get(/databases/$(database)/documents/publicListings/$(data.listingId)).data.sellerId == data.participants[1]
+        && get(/databases/$(database)/documents/publicListings/$(data.listingId)).data.title == data.listingTitle;
+    }
+
+    function validConversationUpdate(conversationId) {
+      return validConversationBase(request.resource.data, conversationId)
+        && conversationParticipantFromData(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastMessage',
+          'lastMessageAt',
+          'lastMessageSenderId'
+        ])
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.listingId == resource.data.listingId
+        && request.resource.data.listingTitle == resource.data.listingTitle
+        && request.resource.data.lastMessageSenderId == request.auth.uid
+        && nonEmptyString(request.resource.data.lastMessage, 1, 240)
+        && request.resource.data.lastMessageAt == request.time;
+    }
+
+    function validConversationMessageCreate(data, conversationId, messageId) {
+      return conversationParticipant(conversationId)
+        && data.clientMessageId == messageId
+        && data.senderId == request.auth.uid
+        && nonEmptyString(data.text, 1, 800)
+        && data.createdAt == request.time
+        && data.seenBy is list
+        && data.seenBy.size() == 1
+        && data.seenBy[0] == request.auth.uid;
+    }
+
+    function validConversationMessageSeenUpdate(conversationId) {
+      return conversationParticipant(conversationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
+        && request.resource.data.senderId == resource.data.senderId
+        && request.resource.data.text == resource.data.text
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.seenBy is list
+        && request.resource.data.seenBy.hasAll(resource.data.seenBy)
+        && request.resource.data.seenBy.hasAny([request.auth.uid])
+        && request.resource.data.seenBy.size() <= get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants.size();
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || isOwner(userId);
+
+      allow create, update: if isOwner(userId)
+        && !request.resource.data.keys().hasAny(['isAdmin', 'isVerifiedParent', 'karmaPoints', 'successfulHandovers']);
+
+      allow delete: if isAdmin() || isOwner(userId);
+    }
+
+    match /publicProfiles/{userId} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create, update: if isOwner(userId);
+
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /privateContacts/{userId} {
+      allow get: if isOwner(userId);
+
+      allow list: if false;
+
+      allow create, update: if isOwner(userId);
+
+      allow delete: if isAdmin() || isOwner(userId);
+    }
+
+    match /contactRevealEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /publicListings/{listingId} {
+      allow get, list: if resource.data.status == 'active'
+        || isAdmin()
+        || (signedIn() && resource.data.sellerId == request.auth.uid);
+
+      allow create: if (isAdmin() || signedIn())
+        && (isAdmin() || request.resource.data.sellerId == request.auth.uid)
+        && validPublicListingDocument(request.resource.data);
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.sellerId == request.auth.uid
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validPublicListingDocument(request.resource.data)
+      );
+
+      allow delete: if isAdmin() || (signedIn() && resource.data.sellerId == request.auth.uid);
+    }
+
+    match /requests/{requestId} {
+      allow get: if isAdmin() || signedIn();
+      allow list: if isAdmin() || (
+        signedIn()
+        && request.query.limit != null
+        && queryLimitWithin(60)
+        && request.query.orderBy.size() == 1
+        && request.query.orderBy[0].field == 'createdAt'
+        && request.query.orderBy[0].dir == 'DESCENDING'
+        && request.query.where.size() == 1
+        && request.query.where[0].field == 'status'
+        && request.query.where[0].op == 'in'
+        && request.query.where[0].value.size() == 2
+        && request.query.where[0].value.hasAll(['open', 'matched'])
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'budget',
+          'category',
+          'createdAt',
+          'keywords',
+          'matchedCount',
+          'normalizedText',
+          'requesterId',
+          'requesterName',
+          'requesterSchool',
+          'school',
+          'status',
+          'subject',
+          'text',
+          'updatedAt',
+          'urgency'
+        ])
+        && request.resource.data.keys().hasAll([
+          'budget',
+          'category',
+          'createdAt',
+          'keywords',
+          'matchedCount',
+          'normalizedText',
+          'requesterId',
+          'requesterName',
+          'requesterSchool',
+          'status',
+          'text',
+          'updatedAt',
+          'urgency'
+        ])
+        && validRequestCreate(request.resource.data);
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.requesterId == request.auth.uid
+        && !request.resource.data.keys().hasAny(['requesterPhone'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'matchedCount',
+          'status',
+          'updatedAt'
+        ])
+        && request.resource.data.requesterId == resource.data.requesterId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.matchedCount >= resource.data.matchedCount
+        && validRequestDocument(request.resource.data)
+        && validRequestStatusTransition()
+        && (request.resource.data.status != 'matched' || request.resource.data.matchedCount > 0)
+      );
+
+      allow delete: if isAdmin() || (signedIn() && resource.data.requesterId == request.auth.uid);
+    }
+
+    match /savedOffers/{savedOfferId} {
+      allow read, delete: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['createdAt', 'noticeId', 'userId'])
+        && request.resource.data.keys().hasAll(['createdAt', 'noticeId', 'userId'])
+        && validSavedOffer(request.resource.data, savedOfferId);
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.reporterId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'adminNotes',
+          'details',
+          'noticeTitle',
+          'reason',
+          'reportedAt',
+          'reportedItemId',
+          'reporterId',
+          'reporterName',
+          'resolvedAt',
+          'sellerId',
+          'sellerName',
+          'severity',
+          'status',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'details',
+          'reason',
+          'reportedAt',
+          'reportedItemId',
+          'reporterId',
+          'severity',
+          'sellerId'
+        ])
+        && reportId == (request.resource.data.reportedItemId + '_' + request.auth.uid)
+        && request.resource.data.status == 'open'
+        && request.resource.data.updatedAt == request.resource.data.reportedAt
+        && request.resource.data.adminNotes == ''
+        && request.resource.data.resolvedAt == null
+        && validReportDocument(request.resource.data, request.auth.uid);
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'adminNotes',
+          'details',
+          'noticeTitle',
+          'reason',
+          'reportedAt',
+          'reportedItemId',
+          'reporterId',
+          'reporterName',
+          'resolvedAt',
+          'sellerId',
+          'sellerName',
+          'severity',
+          'status',
+          'updatedAt'
+        ])
+        && request.resource.data.reporterId == resource.data.reporterId
+        && request.resource.data.reportedItemId == resource.data.reportedItemId
+        && request.resource.data.reportedAt == resource.data.reportedAt
+        && request.resource.data.sellerId == resource.data.sellerId
+        && validReportDocument(request.resource.data, resource.data.reporterId);
+
+      allow delete: if isAdmin() || (signedIn() && resource.data.reporterId == request.auth.uid);
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid);
+
+      allow create, delete: if isAdmin();
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.recipientId == request.auth.uid
+        && !request.resource.data.keys().hasAny(['recipientPhone'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'body',
+          'createdAt',
+          'createdById',
+          'noticeId',
+          'read',
+          'readAt',
+          'recipientId',
+          'recipientPhone',
+          'requestId',
+          'title',
+          'type'
+        ])
+        && request.resource.data.recipientId == resource.data.recipientId
+        && validAlertDocument(request.resource.data)
+      );
+    }
+
+    match /actionRateLimits/{rateLimitId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'action',
+          'count',
+          'createdAt',
+          'maxActions',
+          'updatedAt',
+          'userId',
+          'windowStartedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'action',
+          'count',
+          'createdAt',
+          'maxActions',
+          'updatedAt',
+          'userId',
+          'windowStartedAt'
+        ])
+        && validActionRateLimitDocument(request.resource.data, rateLimitId)
+        && request.resource.data.count == 1
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.windowStartedAt == request.time;
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'action',
+          'count',
+          'createdAt',
+          'maxActions',
+          'updatedAt',
+          'userId',
+          'windowStartedAt'
+        ])
+        && validActionRateLimitDocument(request.resource.data, rateLimitId)
+        && request.resource.data.action == resource.data.action
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.maxActions == resource.data.maxActions
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (
+          (
+            request.resource.data.windowStartedAt == resource.data.windowStartedAt
+            && request.time < resource.data.windowStartedAt + duration.value(1, 'm')
+            && request.resource.data.count == resource.data.count + 1
+          ) || (
+            request.time >= resource.data.windowStartedAt + duration.value(1, 'm')
+            && request.resource.data.count == 1
+            && request.resource.data.windowStartedAt == request.time
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /dealRequests/{dealId} {
+      allow read: if isAdmin() || (signedIn() && dealParticipantsCanRead());
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'buyerId',
+          'buyerName',
+          'buyerPhone',
+          'buyerSchool',
+          'createdAt',
+          'note',
+          'noticeId',
+          'noticePhotoUrl',
+          'noticeTitle',
+          'preferredMeetup',
+          'preferredTime',
+          'sellerId',
+          'sellerName',
+          'status',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'buyerId',
+          'buyerName',
+          'buyerPhone',
+          'createdAt',
+          'noticeId',
+          'noticeTitle',
+          'sellerId',
+          'sellerName',
+          'status',
+          'updatedAt'
+        ])
+        && validDealRequest(request.resource.data, dealId);
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.sellerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'acceptedAt',
+          'completedAt',
+          'rejectedAt',
+          'status',
+          'updatedAt'
+        ])
+        && request.resource.data.updatedAt is timestamp
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedAt is timestamp
+            && request.resource.data.rejectedAt == resource.data.rejectedAt
+            && request.resource.data.completedAt == resource.data.completedAt
+          ) || (
+            resource.data.status == 'pending'
+            && request.resource.data.status == 'rejected'
+            && request.resource.data.rejectedAt is timestamp
+            && request.resource.data.acceptedAt == resource.data.acceptedAt
+            && request.resource.data.completedAt == resource.data.completedAt
+          ) || (
+            resource.data.status == 'accepted'
+            && request.resource.data.status == 'completed'
+            && request.resource.data.acceptedAt == resource.data.acceptedAt
+            && request.resource.data.acceptedAt is timestamp
+            && request.resource.data.rejectedAt == resource.data.rejectedAt
+            && request.resource.data.completedAt is timestamp
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isAdmin() || (
+        signedIn()
+      );
+      allow list: if isAdmin() || (
+        signedIn()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'lastMessage',
+          'lastMessageAt',
+          'lastMessageSenderId',
+          'listingId',
+          'listingTitle',
+          'participants'
+        ])
+        && request.resource.data.keys().hasAll([
+          'lastMessage',
+          'lastMessageAt',
+          'lastMessageSenderId',
+          'listingId',
+          'listingTitle',
+          'participants'
+        ])
+        && validConversationCreate(request.resource.data, conversationId);
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && validConversationUpdate(conversationId)
+      );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isAdmin() || conversationParticipant(conversationId);
+        allow list: if isAdmin() || conversationParticipant(conversationId);
+
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly([
+            'clientMessageId',
+            'createdAt',
+            'seenBy',
+            'senderId',
+            'text'
+          ])
+          && request.resource.data.keys().hasAll([
+            'clientMessageId',
+            'createdAt',
+            'seenBy',
+            'senderId',
+            'text'
+          ])
+          && validConversationMessageCreate(request.resource.data, conversationId, messageId);
+
+        allow update: if isAdmin() || (
+          signedIn()
+          && validConversationMessageSeenUpdate(conversationId)
+        );
+
+        allow delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

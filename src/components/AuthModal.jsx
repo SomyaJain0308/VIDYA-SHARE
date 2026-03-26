@@ -2,23 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
-  Phone,
-  ShieldCheck,
   ArrowRight,
   Loader2,
   CheckCircle2,
   Mail,
   ArrowLeft,
   Chrome,
-  Apple,
   User2,
   Lock,
 } from 'lucide-react';
 import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
   GoogleAuthProvider,
-  OAuthProvider,
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -26,31 +20,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { BrandMark } from './BrandLogo';
-
-const getSendOtpErrorMessage = (error) => {
-  const code = error?.code || '';
-  const host = window.location.hostname;
-
-  if (code === 'auth/invalid-phone-number') return 'Enter a valid 10-digit Indian mobile number.';
-  if (code === 'auth/missing-phone-number') return 'Phone number is required.';
-  if (code === 'auth/captcha-check-failed') return 'Captcha verification failed. Please tap Get Code again.';
-  if (code === 'auth/too-many-requests') return 'Too many attempts from this device. Please try again later.';
-  if (code === 'auth/quota-exceeded') return 'OTP quota exceeded on Firebase. Please try later.';
-  if (code === 'auth/operation-not-allowed') {
-    return 'Phone sign-in is disabled in Firebase Console. Enable it in Authentication > Sign-in method.';
-  }
-  if (code === 'auth/app-not-authorized') {
-    return `Domain "${host}" is not authorized. Add it in Firebase Authentication > Settings > Authorized domains.`;
-  }
-  return 'Could not send OTP right now. Please try again.';
-};
-
-const getVerifyOtpErrorMessage = (error) => {
-  const code = error?.code || '';
-  if (code === 'auth/invalid-verification-code') return 'Invalid OTP. Please check and try again.';
-  if (code === 'auth/code-expired' || code === 'auth/session-expired') return 'OTP expired. Please request a new code.';
-  return 'Could not verify OTP. Please try again.';
-};
+import { APP_NAME } from '../config/compliance';
+import { getStoredLegalAcceptance, saveLegalAcceptance } from '../utils/consent';
 
 const getEmailAuthErrorMessage = (error, mode) => {
   const code = error?.code || '';
@@ -71,9 +42,9 @@ const getEmailAuthErrorMessage = (error, mode) => {
 
 const getGoogleAuthErrorMessage = (error) => {
   const code = error?.code || '';
-  if (code === 'auth/popup-closed-by-user') return 'Google sign-in was closed before it completed.';
+  if (code === 'auth/popup-closed-by-user') return 'Google sign-in was cancelled. You can keep browsing or try again.';
   if (code === 'auth/popup-blocked') return 'Popup was blocked. Allow popups and try Google sign-in again.';
-  if (code === 'auth/cancelled-popup-request') return 'Another sign-in attempt is already in progress.';
+  if (code === 'auth/cancelled-popup-request') return 'Another Google sign-in attempt is already in progress.';
   if (code === 'auth/account-exists-with-different-credential') {
     return 'This email already exists with another sign-in method. Try email sign-in instead.';
   }
@@ -83,28 +54,11 @@ const getGoogleAuthErrorMessage = (error) => {
   return 'Google sign-in could not complete right now.';
 };
 
-const getAppleAuthErrorMessage = (error) => {
-  const code = error?.code || '';
-  if (code === 'auth/popup-closed-by-user') return 'Apple sign-in was closed before it completed.';
-  if (code === 'auth/popup-blocked') return 'Popup was blocked. Allow popups and try Apple sign-in again.';
-  if (code === 'auth/cancelled-popup-request') return 'Another sign-in attempt is already in progress.';
-  if (code === 'auth/account-exists-with-different-credential') {
-    return 'This email already exists with another sign-in method. Try email sign-in instead.';
-  }
-  if (code === 'auth/operation-not-allowed') {
-    return 'Apple sign-in is disabled in Firebase Console. Enable Apple in Authentication > Sign-in method.';
-  }
-  if (code === 'auth/unauthorized-domain' || code === 'auth/app-not-authorized') {
-    return 'This domain is not authorized for Apple sign-in. Add it in Firebase Authentication > Settings > Authorized domains.';
-  }
-  return 'Apple sign-in could not complete right now.';
-};
-
 export default function AuthModal({ onClose, onSuccess }) {
+  const storedLegalAcceptance = getStoredLegalAcceptance();
+  const successTimeoutRef = useRef(null);
   const [view, setView] = useState('CHOICE');
   const [emailMode, setEmailMode] = useState('signin');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -112,131 +66,47 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('Welcome to Vidya Share');
-  const otpRefs = useRef([]);
+  const [acceptedPolicies, setAcceptedPolicies] = useState(storedLegalAcceptance?.accepted === true);
 
-  const clearRecaptcha = () => {
-    if (window.recaptchaVerifier) {
-      try {
-        window.recaptchaVerifier.clear();
-      } catch (error) {
-        console.error('Failed to clear reCAPTCHA', error);
-      }
-      window.recaptchaVerifier = null;
-    }
-    window.recaptchaWidgetId = null;
-  };
-
-  const initializeRecaptcha = async () => {
-    if (window.recaptchaVerifier) return window.recaptchaVerifier;
-
-    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      size: 'invisible',
-      callback: () => {},
-      'expired-callback': () => {
-        setErrorMessage('Captcha expired. Please tap Get Code again.');
-      },
-    });
-
-    window.recaptchaVerifier = verifier;
-    window.recaptchaWidgetId = await verifier.render();
-    return verifier;
-  };
-
-  const resetRecaptchaWidget = () => {
-    try {
-      if (window.grecaptcha && window.recaptchaWidgetId !== null && window.recaptchaWidgetId !== undefined) {
-        window.grecaptcha.reset(window.recaptchaWidgetId);
-      }
-    } catch (error) {
-      console.error('Failed to reset reCAPTCHA widget', error);
-    }
+  const resetTransientState = () => {
+    setIsLoading(false);
+    setErrorMessage('');
+    setSuccessMessage('Welcome to Vidya Share');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   const finishAuth = (message) => {
+    if (acceptedPolicies) {
+      saveLegalAcceptance();
+    }
+    if (successTimeoutRef.current) {
+      window.clearTimeout(successTimeoutRef.current);
+    }
     setSuccessMessage(message);
     setView('SUCCESS');
-    setTimeout(() => {
+    successTimeoutRef.current = window.setTimeout(() => {
       if (onSuccess) onSuccess();
       onClose();
     }, 1100);
   };
 
-  useEffect(() => {
-    return () => {
-      clearRecaptcha();
-      window.confirmationResult = null;
-    };
+  useEffect(() => () => {
+    if (successTimeoutRef.current) {
+      window.clearTimeout(successTimeoutRef.current);
+    }
   }, []);
-
-  useEffect(() => {
-    if (view !== 'PHONE' && view !== 'OTP') return undefined;
-
-    auth.languageCode = 'en';
-    initializeRecaptcha().catch((error) => {
-      console.error('reCAPTCHA init failed', error);
-      setErrorMessage('Captcha could not initialize. Refresh and try again.');
-    });
-
-    return undefined;
-  }, [view]);
-
-  const sendOTP = async () => {
-    const onlyDigits = phone.replace(/\D/g, '');
-    const localPhone = onlyDigits.slice(-10);
-
-    if (localPhone.length !== 10) {
-      setErrorMessage('Enter a valid 10-digit Indian mobile number.');
-      return;
-    }
-
-    setPhone(localPhone);
-    setIsLoading(true);
-    setErrorMessage('');
-
-    try {
-      const appVerifier = await initializeRecaptcha();
-      const formattedPhone = `+91${localPhone}`;
-      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      window.confirmationResult = confirmationResult;
-      setOtp(['', '', '', '', '', '']);
-      setView('OTP');
-    } catch (error) {
-      console.error('SMS not sent', error);
-      setErrorMessage(getSendOtpErrorMessage(error));
-      resetRecaptchaWidget();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const verifyOTP = async () => {
-    if (otp.some((digit) => digit === '')) return;
-    if (!window.confirmationResult) {
-      setErrorMessage('OTP session expired. Please request a new code.');
-      setView('PHONE');
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMessage('');
-    try {
-      const code = otp.join('');
-      await window.confirmationResult.confirm(code);
-      window.confirmationResult = null;
-      finishAuth('Phone verified successfully');
-    } catch (error) {
-      console.error('Invalid OTP', error);
-      setErrorMessage(getVerifyOtpErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleEmailAuth = async (event) => {
     event.preventDefault();
+    if (isLoading) return;
     const cleanEmail = email.trim();
     const cleanName = fullName.trim();
 
+    if (!acceptedPolicies) {
+      setErrorMessage('Please review and accept the platform policies before continuing.');
+      return;
+    }
     if (!cleanEmail || !password) {
       setErrorMessage('Enter your email and password.');
       return;
@@ -272,6 +142,11 @@ export default function AuthModal({ onClose, onSuccess }) {
   };
 
   const handleGoogleSignIn = async () => {
+    if (isLoading) return;
+    if (!acceptedPolicies) {
+      setErrorMessage('Please review and accept the platform policies before continuing.');
+      return;
+    }
     setIsLoading(true);
     setErrorMessage('');
     try {
@@ -281,57 +156,19 @@ export default function AuthModal({ onClose, onSuccess }) {
       finishAuth('Google account connected');
     } catch (error) {
       console.error('Google auth failed', error);
+      if (error?.code === 'auth/popup-closed-by-user') {
+        resetTransientState();
+        setErrorMessage('');
+        return;
+      }
       setErrorMessage(getGoogleAuthErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAppleSignIn = async () => {
-    setIsLoading(true);
-    setErrorMessage('');
-    try {
-      const provider = new OAuthProvider('apple.com');
-      provider.addScope('email');
-      provider.addScope('name');
-      await signInWithPopup(auth, provider);
-      finishAuth('Apple account connected');
-    } catch (error) {
-      console.error('Apple auth failed', error);
-      setErrorMessage(getAppleAuthErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleOtpChange = (index, value) => {
-    const cleanValue = value.replace(/\D/g, '').slice(-1);
-    if (value !== '' && cleanValue === '') return;
-
-    const nextOtp = [...otp];
-    nextOtp[index] = cleanValue;
-    setOtp(nextOtp);
-
-    if (cleanValue !== '' && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-    if (cleanValue !== '' && index === 5 && nextOtp.every((digit) => digit !== '')) {
-      verifyOTP();
-    }
-  };
-
-  const handleOtpKeyDown = (index, event) => {
-    if (event.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
   const goBackToChoice = () => {
-    setErrorMessage('');
-    setIsLoading(false);
-    if (view === 'OTP') {
-      setOtp(['', '', '', '', '', '']);
-    }
+    resetTransientState();
     setView('CHOICE');
   };
 
@@ -357,8 +194,6 @@ export default function AuthModal({ onClose, onSuccess }) {
           </motion.button>
         </div>
 
-        <div id="recaptcha-container" className="min-h-[1px]" />
-
         <AnimatePresence mode="wait">
           {view === 'CHOICE' && (
             <motion.div
@@ -371,13 +206,13 @@ export default function AuthModal({ onClose, onSuccess }) {
               <BrandMark className="mb-6 h-14 w-14" />
               <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Secure Access</p>
               <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white sm:text-[2rem]">Sign in your way</h2>
-              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">Use Google, email, or your phone number to enter Vidya Share securely.</p>
+              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">Use Google or email to continue. You can keep browsing without logging in.</p>
 
               <div className="space-y-3">
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
-                  disabled={isLoading}
+                  disabled={isLoading || !acceptedPolicies}
                   className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
@@ -386,18 +221,8 @@ export default function AuthModal({ onClose, onSuccess }) {
 
                 <button
                   type="button"
-                  onClick={handleAppleSignIn}
-                  disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721] disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Apple className="h-5 w-5" />}
-                  Continue with Apple
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => {
-                    setErrorMessage('');
+                    resetTransientState();
                     setView('EMAIL');
                   }}
                   className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721]"
@@ -405,18 +230,41 @@ export default function AuthModal({ onClose, onSuccess }) {
                   <Mail className="h-5 w-5" />
                   Continue with Email
                 </button>
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMessage('');
-                    setView('PHONE');
-                  }}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-cyan-300/18 bg-[#08111a]/92 px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-300/40 hover:bg-[#0c1721]"
-                >
-                  <Phone className="h-5 w-5" />
-                  Continue with Phone OTP
-                </button>
+              <div className="mt-5 space-y-3 rounded-[1.4rem] border border-cyan-300/14 bg-[#08111a]/86 p-4">
+                <label className="flex items-start gap-3 text-sm leading-relaxed text-cyan-50/80">
+                  <input
+                    name="accept_policies"
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-cyan-300"
+                    checked={acceptedPolicies}
+                    onChange={(event) => {
+                      setAcceptedPolicies(event.target.checked);
+                      if (event.target.checked) setErrorMessage('');
+                    }}
+                  />
+                  <span>
+                    I have reviewed the{' '}
+                    <a href="/terms" target="_blank" rel="noreferrer" className="font-semibold text-cyan-100 underline-offset-4 hover:underline">
+                      Terms & Conditions
+                    </a>
+                    ,{' '}
+                    <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-cyan-100 underline-offset-4 hover:underline">
+                      Privacy Policy
+                    </a>
+                    ,{' '}
+                    <a href="/refund-policy" target="_blank" rel="noreferrer" className="font-semibold text-cyan-100 underline-offset-4 hover:underline">
+                      Refund / Return Policy
+                    </a>
+                    , and{' '}
+                    <a href="/disclaimer" target="_blank" rel="noreferrer" className="font-semibold text-cyan-100 underline-offset-4 hover:underline">
+                      Marketplace Disclaimer
+                    </a>
+                    . We will ask for confirmation before sensitive actions if needed.
+                  </span>
+                </label>
+
               </div>
 
               {errorMessage && <p className="mt-4 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{errorMessage}</p>}
@@ -459,7 +307,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   type="button"
                   onClick={() => {
                     setEmailMode('signin');
-                    setErrorMessage('');
+                    resetTransientState();
                   }}
                   className={`flex-1 rounded-[1rem] px-4 py-2.5 text-sm font-semibold transition ${
                     emailMode === 'signin' ? 'bg-cyan-300 text-[#06131d]' : 'text-cyan-50/68'
@@ -471,7 +319,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   type="button"
                   onClick={() => {
                     setEmailMode('signup');
-                    setErrorMessage('');
+                    resetTransientState();
                   }}
                   className={`flex-1 rounded-[1rem] px-4 py-2.5 text-sm font-semibold transition ${
                     emailMode === 'signup' ? 'bg-cyan-300 text-[#06131d]' : 'text-cyan-50/68'
@@ -486,6 +334,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   <div className="relative">
                     <User2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                     <input
+                      name="full_name"
                       type="text"
                       placeholder="Your name"
                       autoFocus
@@ -499,6 +348,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                   <input
+                    name="email"
                     type="email"
                     placeholder="name@gmail.com"
                     autoFocus={emailMode !== 'signup'}
@@ -511,6 +361,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                   <input
+                    name="password"
                     type="password"
                     placeholder="Password"
                     className="lux-input w-full py-4 pl-11 pr-4 text-sm font-medium"
@@ -523,6 +374,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   <div className="relative">
                     <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-50/42" />
                     <input
+                      name="confirm_password"
                       type="password"
                       placeholder="Confirm password"
                       className="lux-input w-full py-4 pl-11 pr-4 text-sm font-medium"
@@ -551,133 +403,6 @@ export default function AuthModal({ onClose, onSuccess }) {
 
               {errorMessage && <p className="mt-4 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{errorMessage}</p>}
             </motion.form>
-          )}
-
-          {view === 'PHONE' && (
-            <motion.div
-              key="phone"
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              className="mt-4"
-            >
-              <button
-                type="button"
-                onClick={goBackToChoice}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-[#08111a]/90 px-3 py-1.5 text-xs font-semibold text-cyan-50/82 transition hover:border-cyan-300/36 hover:text-white"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </button>
-
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/24 bg-cyan-300/10">
-                <ShieldCheck className="h-7 w-7 text-cyan-100" />
-              </div>
-              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Phone Login</p>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white sm:text-[2rem]">Secure phone login</h2>
-              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">Verify your number with OTP to join the local parent network.</p>
-
-              <div className="group relative mb-8 flex items-center">
-                <div className="absolute inset-y-0 left-0 flex items-center justify-center rounded-l-2xl border-r border-cyan-300/18 bg-[#08111a] pl-5 pr-3">
-                  <span className="text-base font-semibold text-cyan-100">+91</span>
-                </div>
-                <input
-                  type="tel"
-                  maxLength="10"
-                  autoFocus
-                  placeholder="98765 43210"
-                  className="w-full rounded-2xl border border-cyan-300/18 bg-[#08111a] py-5 pl-24 pr-4 text-2xl font-semibold tracking-[0.12em] text-white outline-none transition-colors placeholder:text-cyan-50/28 focus:border-cyan-300/42"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))}
-                />
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={sendOTP}
-                disabled={phone.length < 10 || isLoading}
-                className="btn-primary flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    Get Code <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </motion.button>
-
-              {errorMessage && <p className="mt-4 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{errorMessage}</p>}
-            </motion.div>
-          )}
-
-          {view === 'OTP' && (
-            <motion.div key="otp" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="mt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage('');
-                  setView('PHONE');
-                }}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-[#08111a]/90 px-3 py-1.5 text-xs font-semibold text-cyan-50/82 transition hover:border-cyan-300/36 hover:text-white"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </button>
-
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/24 bg-cyan-300/10">
-                <Phone className="h-7 w-7 text-cyan-100" />
-              </div>
-              <p className="mb-2 text-[10px] font-semibold tracking-[0.2em] text-cyan-100/70 uppercase">Verification</p>
-              <h2 className="font-display mb-3 text-3xl font-semibold leading-tight text-white">Enter 6-digit OTP</h2>
-              <p className="mb-8 text-sm leading-relaxed text-cyan-50/72">
-                Code sent to <span className="font-semibold text-white">+91 {phone}</span>.{' '}
-                <button onClick={() => setView('PHONE')} className="font-semibold text-cyan-100 underline underline-offset-4">
-                  Edit number
-                </button>
-              </p>
-
-              <div className="mb-8 flex justify-between gap-2.5 sm:gap-3">
-                {otp.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(element) => {
-                      otpRefs.current[index] = element;
-                    }}
-                    type="tel"
-                    maxLength="1"
-                    className="h-16 w-full rounded-xl border border-cyan-300/18 bg-[#08111a] text-center text-3xl font-semibold text-white outline-none transition-colors placeholder:text-cyan-50/22 focus:border-cyan-300/42 sm:h-20"
-                    value={digit}
-                    placeholder="-"
-                    onChange={(event) => handleOtpChange(index, event.target.value)}
-                    onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                  />
-                ))}
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={verifyOTP}
-                disabled={otp.some((value) => value === '') || isLoading}
-                className="btn-primary flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Verify & Enter'}
-              </motion.button>
-
-              {errorMessage && <p className="mt-4 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{errorMessage}</p>}
-
-              <div className="mt-6 text-center">
-                <button
-                  type="button"
-                  onClick={sendOTP}
-                  className="text-xs font-semibold text-cyan-100/70 underline underline-offset-4 transition-colors hover:text-white"
-                >
-                  Resend Code
-                </button>
-              </div>
-            </motion.div>
           )}
 
           {view === 'SUCCESS' && (

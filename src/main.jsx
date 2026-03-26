@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 
 const mountEmergencyRoot = (message = 'The app could not finish starting on this device.') => {
@@ -56,9 +57,15 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 const bootApp = async () => {
   try {
     const [{ default: App }] = await Promise.all([import('./App.jsx')])
-    const appTree = import.meta.env.PROD ? <App /> : (
-      <React.StrictMode>
+    const appTree = import.meta.env.PROD ? (
+      <BrowserRouter>
         <App />
+      </BrowserRouter>
+    ) : (
+      <React.StrictMode>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </React.StrictMode>
     )
 

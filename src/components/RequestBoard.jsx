@@ -25,7 +25,7 @@ const buildRequestSummary = (request) => {
   if (request.category) chips.push(request.category);
   if (request.subject) chips.push(request.subject);
   if (request.school) chips.push(request.school);
-  if (request.budget && Number(request.budget) > 0) chips.push(`Budget Rs ${request.budget}`);
+  if (request.budget && Number(request.budget) > 0) chips.push(`Budget ₹${request.budget}`);
   if (request.urgency) chips.push(request.urgency);
   return chips;
 };
@@ -59,11 +59,6 @@ export default function RequestBoard({
           const isOwnRequest = currentUserId && request.requesterId === currentUserId;
           const canMarkFulfilled = isOwnRequest && request.status !== 'fulfilled';
           const isBusy = fulfillingRequestId === request.id;
-          const whatsappLink = request.requesterPhone
-            ? `https://wa.me/${String(request.requesterPhone).replace(/\D/g, '')}?text=${encodeURIComponent(
-                `Hi! I saw your request for "${request.text}" on Vidya Share. I might have a match.`
-              )}`
-            : null;
 
           return (
             <article
@@ -100,16 +95,6 @@ export default function RequestBoard({
               </div>
 
               <div className="flex w-full flex-wrap items-center justify-end gap-2">
-                {whatsappLink && (
-                  <a
-                    href={whatsappLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full bg-cyan-200 px-3.5 py-1.5 text-xs font-bold text-[#061923] transition hover:brightness-105 whitespace-nowrap"
-                  >
-                    I have this
-                  </a>
-                )}
                 {canMarkFulfilled && (
                   <button
                     type="button"

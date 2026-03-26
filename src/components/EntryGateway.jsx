@@ -29,7 +29,7 @@ export default function EntryGateway({ onChooseList, onChooseFind, onChooseProfi
 
       <div className="relative z-10">
         <div className="safe-inline border-b border-cyan-300/14 bg-black/22 py-2 text-center text-xs font-semibold uppercase tracking-[0.22em] text-cyan-50/76 backdrop-blur-md">
-          Lucknow used books exchange - trusted handovers - zero shipping
+          Saharanpur used books exchange - trusted handovers - zero shipping
         </div>
 
         <header className="safe-inline mx-auto flex w-full max-w-[1760px] items-center justify-between py-5">
@@ -46,7 +46,7 @@ export default function EntryGateway({ onChooseList, onChooseFind, onChooseProfi
               Direct peer-to-peer book exchange
             </span>
             <span className="rounded-full border border-cyan-300/15 bg-white/6 px-4 py-2 text-xs font-semibold text-cyan-50/78">
-              Built for Lucknow students
+              Built for Saharanpur students
             </span>
           </div>
         </header>
@@ -61,7 +61,7 @@ export default function EntryGateway({ onChooseList, onChooseFind, onChooseProfi
                 </p>
                 <h1 className="font-display mt-6 max-w-5xl text-4xl font-semibold leading-[0.98] text-white sm:text-6xl xl:text-[5.6rem]">
                   The used-book network
-                  <span className="font-accent ml-3 text-cyan-300">Lucknow students trust</span>
+                  <span className="font-accent ml-3 text-cyan-300">Saharanpur students trust</span>
                 </h1>
                 <p className="mt-6 max-w-3xl text-base leading-relaxed text-cyan-50/72 sm:text-[1.08rem]">
                   Vidya Share helps students exchange books with direct handovers, cleaner trust signals, and a marketplace that finally looks serious.
@@ -124,7 +124,7 @@ export default function EntryGateway({ onChooseList, onChooseFind, onChooseProfi
                   <div>
                     <p className="section-kicker">
                       <MapPin className="h-3.5 w-3.5" />
-                      Lucknow Network
+                      SRE Network
                     </p>
                     <h2 className="font-display mt-4 text-2xl font-semibold text-white">Built for readers, not random classifieds</h2>
                   </div>

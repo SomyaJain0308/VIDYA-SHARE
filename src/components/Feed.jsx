@@ -1,9 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Share2, Flag, Clock, AlertTriangle, PackageOpen, ShieldCheck, User, X, ShoppingBag, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { Share2, Flag, Clock, AlertTriangle, PackageOpen, User, ShoppingBag, Loader2, Search, ChevronLeft, ChevronRight, MapPin, MessageCircle } from 'lucide-react';
+import { collection, serverTimestamp, doc, setDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { generateWhatsAppLink } from '../utils/whatsapp';
 import { normalizeSchoolInput } from '../data/schools';
+import { DIRECT_TRANSACTION_NOTICE } from '../config/compliance';
+import { buildListingShareUrl, getListingLocationLabel } from '../utils/listings';
+import { createReserveRequest } from '../utils/requestIntegrity';
+import ReportListingModal from './ReportListingModal';
+import { MARKETPLACE_SAFETY_TIPS } from '../utils/marketplaceCompliance';
+import { submitListingReport } from '../utils/reporting';
+import { trackContactInitiated, trackListingSaved } from '../utils/analytics';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Just now';
@@ -68,139 +74,166 @@ const fuzzyMatchText = (sourceText, queryText) => {
   );
 };
 
-const DEMO_LISTINGS = [
-  {
-    id: 'demo-1',
-    _isPreview: true,
-    title: 'NCERT Class 10 Maths Combo',
-    category: 'Books',
-    subject: 'Mathematics',
-    condition: 'Good',
-    price: 180,
-    school: '',
-    colony: 'Aliganj',
-    sellerName: 'Suhani Parent',
-    photoUrl: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1200&q=80',
-    status: 'active',
-    successNote: 'Textbook plus exemplar set with neat pencil work only on a few pages.',
-  },
-  {
-    id: 'demo-2',
-    _isPreview: true,
-    title: 'Oswaal Physics Question Bank',
-    category: 'Books',
-    subject: 'Physics',
-    condition: 'Like New',
-    price: 140,
-    school: '',
-    colony: 'Gomti Nagar',
-    sellerName: 'Dev Student',
-    photoUrl: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=1200&q=80',
-    status: 'active',
-    successNote: 'Useful for board numericals and chapter-wise revision.',
-  },
-  {
-    id: 'demo-3',
-    _isPreview: true,
-    title: 'Together With English Practice Book',
-    category: 'Books',
-    subject: 'English',
-    condition: 'Good',
-    price: 95,
-    school: '',
-    colony: 'Indira Nagar',
-    sellerName: 'Rhea Guardian',
-    photoUrl: 'https://images.unsplash.com/photo-1491841550275-ad7854e35ca6?auto=format&fit=crop&w=1200&q=80',
-    status: 'active',
-    successNote: 'Most worksheets untouched, cover slightly folded.',
-  },
-  {
-    id: 'demo-4',
-    _isPreview: true,
-    title: 'Class 12 Chemistry Notes Bundle',
-    category: 'Books',
-    subject: 'Chemistry',
-    condition: 'Fair',
-    price: 70,
-    school: '',
-    colony: 'Mahanagar',
-    sellerName: 'Aditi Student',
-    photoUrl: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=1200&q=80',
-    status: 'active',
-    successNote: 'Organic, inorganic, and practical notes clipped together.',
-  },
-  {
-    id: 'demo-5',
-    _isPreview: true,
-    title: 'Biology NCERT + Diagrams Notebook',
-    category: 'Books',
-    subject: 'Biology',
-    condition: 'Good',
-    price: 130,
-    school: '',
-    colony: 'Hazratganj',
-    sellerName: 'Kashvi Student',
-    photoUrl: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=1200&q=80',
-    status: 'active',
-    successNote: 'Helpful labeled diagrams and chapter summaries included.',
-  },
-  {
-    id: 'demo-6',
-    _isPreview: true,
-    title: 'Accountancy Sample Papers 2026',
-    category: 'Books',
-    subject: 'Accountancy',
-    condition: 'Like New',
-    price: 110,
-    school: '',
-    colony: 'Ashiyana',
-    sellerName: 'Vihaan Student',
-    photoUrl: 'https://images.unsplash.com/photo-1524578271613-d550eacf6090?auto=format&fit=crop&w=1200&q=80',
-    status: 'active',
-    successNote: 'Latest sample paper edition with solved answers.',
-  },
+const getSellerVerificationLabel = (listing = {}) =>
+  listing?.sellerVerificationStatus === 'basic-self-declared'
+    ? 'Basic seller check completed'
+    : 'Basic seller check pending';
+
+const PREFERRED_CLASS_EXAM_OPTIONS = [
+  'Class 9',
+  'Class 10',
+  'Class 11',
+  'Class 12',
+  'JEE',
+  'NEET',
+  'CUET',
+  'BITSAT',
+  'NDA',
+  'CLAT',
+  'CA Foundation',
+  'UGEE',
+  'IPMAT',
+  'NIFT',
+  'NID',
+  'AIIMS',
+  'Olympiad',
+  'Class 6',
+  'Class 7',
+  'Class 8',
 ];
 
+const normalizeClassExamLabel = (value = '') => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+
+  const normalized = trimmed.toLowerCase().replace(/\s+/g, ' ');
+  const aliasMap = {
+    '6': 'Class 6',
+    'class 6': 'Class 6',
+    'grade 6': 'Class 6',
+    '6th': 'Class 6',
+    '7': 'Class 7',
+    'class 7': 'Class 7',
+    'grade 7': 'Class 7',
+    '7th': 'Class 7',
+    '8': 'Class 8',
+    'class 8': 'Class 8',
+    'grade 8': 'Class 8',
+    '8th': 'Class 8',
+    '9': 'Class 9',
+    'class 9': 'Class 9',
+    'grade 9': 'Class 9',
+    '9th': 'Class 9',
+    '10': 'Class 10',
+    'class 10': 'Class 10',
+    'grade 10': 'Class 10',
+    '10th': 'Class 10',
+    '11': 'Class 11',
+    'class 11': 'Class 11',
+    'grade 11': 'Class 11',
+    '11th': 'Class 11',
+    '12': 'Class 12',
+    'class 12': 'Class 12',
+    'grade 12': 'Class 12',
+    '12th': 'Class 12',
+    jee: 'JEE',
+    'jee mains': 'JEE',
+    'jee advanced': 'JEE',
+    neet: 'NEET',
+    'neet ug': 'NEET',
+    cuet: 'CUET',
+    'cuet ug': 'CUET',
+    bitsat: 'BITSAT',
+    nda: 'NDA',
+    clat: 'CLAT',
+    'ca foundation': 'CA Foundation',
+    ugee: 'UGEE',
+    ipmat: 'IPMAT',
+    nift: 'NIFT',
+    nid: 'NID',
+    aiims: 'AIIMS',
+    olympiad: 'Olympiad',
+    olympiads: 'Olympiad',
+  };
+
+  return aliasMap[normalized] || trimmed;
+};
+
+const buildClassExamOptions = (notices = []) => {
+  const normalizedValues = notices
+    .map((notice) => normalizeClassExamLabel(notice.classGrade || ''))
+    .filter(Boolean);
+
+  const uniqueValues = [...new Set(normalizedValues)];
+  const preferredValues = PREFERRED_CLASS_EXAM_OPTIONS.filter((option) => uniqueValues.includes(option));
+  const remainingValues = uniqueValues
+    .filter((option) => !PREFERRED_CLASS_EXAM_OPTIONS.includes(option))
+    .sort((left, right) => left.localeCompare(right));
+
+  return ['all', ...preferredValues, ...remainingValues];
+};
+
 export default function Feed({
-  notices,
+  listings,
   userProfile,
   onStartListing,
-  onOpenRequests,
+  onOpenListing,
+  onOpenChat,
   onRequireAuth,
   cartToggleSignal = 0,
   onSavedCountChange,
+  onLoadMoreListings,
+  hasMoreListings = false,
+  isLoadingMoreListings = false,
+  isListingsLoading = false,
+  listingsLoadError = '',
 }) {
-  const NETWORK_CITY = 'Lucknow';
-  const stageRef = useRef(null);
+  const SAVE_TOGGLE_DEBOUNCE_MS = 500;
+  const NETWORK_CITY = 'Saharanpur';
+  const listingsRef = useRef(null);
+  const saveToggleTimeoutRef = useRef({});
+  const savedOffersRef = useRef([]);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true
   );
   const [schoolFilter, setSchoolFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('Books');
   const [searchQuery, setSearchQuery] = useState('');
   const [recencyFilter, setRecencyFilter] = useState('all');
   const [sortMode, setSortMode] = useState('bestMatch');
+  const [classFilter, setClassFilter] = useState('all');
+  const [priceFilter, setPriceFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [colonyFilter, setColonyFilter] = useState('all');
-  const [showSold, setShowSold] = useState(false);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [reportedItems, setReportedItems] = useState([]);
   const [savedOffers, setSavedOffers] = useState([]);
-  const [savingOfferId, setSavingOfferId] = useState('');
+  const [savingOfferIds, setSavingOfferIds] = useState({});
   const [cardImageIndexById, setCardImageIndexById] = useState({});
-  const [sellerProfiles, setSellerProfiles] = useState({});
-  const [activeProfile, setActiveProfile] = useState(null);
-  const [featuredBookIndex, setFeaturedBookIndex] = useState(0);
-  const [bookSubjectFilter, setBookSubjectFilter] = useState('all');
+  const [brokenImageKeys, setBrokenImageKeys] = useState({});
   const [showStageFilters, setShowStageFilters] = useState(false);
   const [reserveNotice, setReserveNotice] = useState(null);
   const [reserveForm, setReserveForm] = useState({ preferredMeetup: '', preferredTime: '', note: '' });
   const [isReserveSubmitting, setIsReserveSubmitting] = useState(false);
   const [reserveError, setReserveError] = useState('');
+  const [reportTarget, setReportTarget] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState('');
   const [reservedNoticeIds, setReservedNoticeIds] = useState([]);
   const [visibleNoticeCount, setVisibleNoticeCount] = useState(12);
   const currentUserId = auth.currentUser?.uid || '';
+  const visibleSavedCount = listings
+    ? [...new Set((listings || []).filter((notice) => savedOffers.includes(notice.id)).map((notice) => notice.id))].length
+    : 0;
 
-  const categories = ['Books'];
+  const markImageBroken = (listingId, imageUrl) => {
+    const key = `${listingId}:${imageUrl}`;
+    setBrokenImageKeys((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  };
+
+  const isImageBroken = (listingId, imageUrl) => Boolean(brokenImageKeys[`${listingId}:${imageUrl}`]);
+
   const recencyOptions = [
     { value: 'all', label: 'All' },
     { value: '24h', label: '24h' },
@@ -218,11 +251,83 @@ export default function Feed({
     { value: 'myColony', label: 'My colony' },
     { value: 'sameSchool', label: 'Same institution' },
   ];
+  const priceOptions = [
+    { value: 'all', label: 'Any price' },
+    { value: 'free', label: 'Free' },
+    { value: 'under200', label: 'Under Rs 200' },
+    { value: '200to500', label: 'Rs 200-500' },
+    { value: 'over500', label: 'Over Rs 500' },
+  ];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const schoolParam = params.get('school');
+    const searchParam = params.get('search');
     if (schoolParam) setSchoolFilter(normalizeSchoolInput(schoolParam));
+    if (searchParam) setSearchQuery(searchParam);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setReservedNoticeIds([]);
+      return undefined;
+    }
+
+    const loadReservedNoticeIds = async () => {
+      try {
+        const snapshot = await getDocs(query(collection(db, 'dealRequests'), where('buyerId', '==', currentUserId)));
+        const nextNoticeIds = snapshot.docs
+          .map((entry) => entry.data()?.noticeId)
+          .filter(Boolean);
+        setReservedNoticeIds([...new Set(nextNoticeIds)]);
+      } catch (error) {
+        console.error('Failed to load reserve requests', error);
+      }
+    };
+
+    loadReservedNoticeIds();
+    return undefined;
+  }, [currentUserId]);
+
+  useEffect(() => {
+    savedOffersRef.current = savedOffers;
+  }, [savedOffers]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(saveToggleTimeoutRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      saveToggleTimeoutRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const title = 'Used School Books in Saharanpur | VidyaShare';
+    const description =
+      'Buy and sell used school books in Saharanpur. Save money and connect with local students easily.';
+    const rootUrl = `${window.location.origin}/`;
+    const updateMetaContent = (selector, value) => {
+      const node = document.querySelector(selector);
+      if (node) node.setAttribute('content', value);
+    };
+
+    document.documentElement.lang = 'en-IN';
+    document.title = title;
+    updateMetaContent('meta[name="description"]', description);
+    updateMetaContent('meta[name="keywords"]', 'Saharanpur books, used books Saharanpur, class 11 books Saharanpur, class 12 books Saharanpur');
+    updateMetaContent('meta[property="og:title"]', title);
+    updateMetaContent('meta[property="og:description"]', description);
+    updateMetaContent('meta[property="og:url"]', rootUrl);
+    updateMetaContent('meta[property="og:image:alt"]', 'VidyaShare marketplace for used school books in Saharanpur');
+    updateMetaContent('meta[name="twitter:title"]', title);
+    updateMetaContent('meta[name="twitter:description"]', description);
+    updateMetaContent('meta[name="twitter:image:alt"]', 'VidyaShare marketplace for used school books in Saharanpur');
+
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) canonical.setAttribute('href', rootUrl);
   }, []);
 
   useEffect(() => {
@@ -244,93 +349,93 @@ export default function Feed({
   }, []);
 
   useEffect(() => {
-    if (schoolFilter) {
-      setSchoolFilter('');
-    }
-  }, [schoolFilter]);
-
-  useEffect(() => {
     if (!currentUserId) {
       setSavedOffers([]);
       return undefined;
     }
 
-    const savedQuery = query(collection(db, 'savedOffers'), where('userId', '==', currentUserId));
-    const unsubscribe = onSnapshot(savedQuery, (snapshot) => {
-      const nextSaved = [];
-      snapshot.forEach((entry) => {
-        const data = entry.data();
-        if (data?.noticeId) nextSaved.push(data.noticeId);
-      });
-      setSavedOffers(nextSaved);
-    });
+    const loadSavedOffers = async () => {
+      try {
+        const snapshot = await getDocs(query(collection(db, 'savedOffers'), where('userId', '==', currentUserId)));
+        const nextSaved = [];
+        snapshot.forEach((entry) => {
+          const data = entry.data();
+          if (data?.noticeId) nextSaved.push(data.noticeId);
+        });
+        setSavedOffers(nextSaved);
+      } catch (error) {
+        console.error('Failed to load saved offers', error);
+      }
+    };
 
-    return () => unsubscribe();
+    loadSavedOffers();
+    return undefined;
   }, [currentUserId]);
 
   useEffect(() => {
     if (typeof onSavedCountChange === 'function') {
-      onSavedCountChange(savedOffers.length);
+      onSavedCountChange(visibleSavedCount);
     }
-  }, [onSavedCountChange, savedOffers.length]);
+  }, [onSavedCountChange, visibleSavedCount]);
 
   useEffect(() => {
     if (!cartToggleSignal) return;
     setShowSavedOnly((prev) => !prev);
   }, [cartToggleSignal]);
 
-  useEffect(() => {
-    const sellerIds = [...new Set((notices || []).map((notice) => notice.sellerId).filter(Boolean))];
-    if (sellerIds.length === 0) return;
-    let cancelled = false;
-
-    const loadSellerProfiles = async () => {
-      const profileEntries = await Promise.all(
-        sellerIds.map(async (sellerId) => {
-          try {
-            const profileDoc = await getDoc(doc(db, 'users', sellerId));
-            return [sellerId, profileDoc.exists() ? profileDoc.data() : null];
-          } catch (error) {
-            console.error('Failed to load seller profile', error);
-            return [sellerId, null];
-          }
-        })
-      );
-
-      if (cancelled) return;
-      setSellerProfiles((prev) => {
-        const next = { ...prev };
-        profileEntries.forEach(([sellerId, data]) => {
-          if (data) next[sellerId] = data;
-        });
-        return next;
-      });
-    };
-
-    loadSellerProfiles();
-    return () => {
-      cancelled = true;
-    };
-  }, [notices]);
-
   const handleReport = async (item) => {
-    if (!window.confirm('Report this listing? It will be hidden from your feed immediately.')) return;
+    if (!auth.currentUser) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
 
-    setReportedItems((prev) => [...prev, item.id]);
+    setReportTarget(item);
+    setReportReason('');
+    setReportDetails('');
+    setReportError('');
+  };
+
+  const closeReportModal = () => {
+    if (isReportSubmitting) return;
+    setReportTarget(null);
+    setReportReason('');
+    setReportDetails('');
+    setReportError('');
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget || !auth.currentUser) return;
+    if (!reportReason) {
+      setReportError('Choose a report reason so the moderation queue can triage it correctly.');
+      return;
+    }
+
+    setIsReportSubmitting(true);
+    setReportError('');
     try {
-      await addDoc(collection(db, 'reports'), {
-        reportedItemId: item.id,
-        sellerId: item.sellerId,
-        reason: 'User Flagged',
-        reportedAt: serverTimestamp(),
+      const result = await submitListingReport({
+        db,
+        listing: reportTarget,
+        reporterId: auth.currentUser.uid,
+        reporterName: userProfile?.displayName || auth.currentUser.displayName || '',
+        reason: reportReason,
+        details: reportDetails,
       });
+      setReportedItems((prev) => (prev.includes(reportTarget.id) ? prev : [...prev, reportTarget.id]));
+      if (result.alreadyExists) {
+        window.alert('You already reported this listing. We kept it hidden from your feed.');
+      }
+      closeReportModal();
     } catch (error) {
       console.error('Report failed', error);
+      setReportError(error?.message || 'Could not send this report right now.');
+    } finally {
+      setIsReportSubmitting(false);
     }
   };
 
   const handleNativeShare = async (item) => {
-    const shareUrl = `${window.location.origin}?item=${item.id}`;
+    const shareUrl = buildListingShareUrl(item.id);
     const shareData = {
       title: `Vidya Share: ${item.title}`,
       text: `Look at this ${item.title} on Vidya Share for ${item.price === 0 ? 'FREE' : `Rs ${item.price}`}.`,
@@ -349,23 +454,14 @@ export default function Feed({
     }
   };
 
-  const openSellerProfile = (notice) => {
-    const profile = sellerProfiles[notice.sellerId] || {};
-    if (profile.publicProfile === false) {
-      alert('This seller has hidden their public profile.');
-      return;
-    }
-
-    setActiveProfile({
-      ...profile,
-      fallbackSchool: notice.school || '',
-      fallbackName: notice.sellerName || 'Community Member',
-      phoneFromListing: notice.sellerPhone || '',
-    });
+  const openListing = (noticeId, analyticsContext = null) => {
+    if (!noticeId || typeof onOpenListing !== 'function') return;
+    onOpenListing(noticeId, analyticsContext);
   };
 
   const toggleSaveOffer = async (noticeId) => {
     if (!noticeId) return;
+    if (savingOfferIds[noticeId] || saveToggleTimeoutRef.current[noticeId]) return;
 
     if (!auth.currentUser) {
       if (onRequireAuth) {
@@ -377,24 +473,41 @@ export default function Feed({
     }
 
     const docId = `${auth.currentUser.uid}_${noticeId}`;
-    const alreadySaved = savedOffers.includes(noticeId);
-    setSavingOfferId(noticeId);
-    try {
-      if (alreadySaved) {
-        await deleteDoc(doc(db, 'savedOffers', docId));
-      } else {
-        await setDoc(doc(db, 'savedOffers', docId), {
-          userId: auth.currentUser.uid,
-          noticeId,
-          createdAt: serverTimestamp(),
+    setSavingOfferIds((current) => ({ ...current, [noticeId]: true }));
+
+    saveToggleTimeoutRef.current[noticeId] = window.setTimeout(async () => {
+      try {
+        const alreadySaved = savedOffersRef.current.includes(noticeId);
+        if (alreadySaved) {
+          await deleteDoc(doc(db, 'savedOffers', docId));
+        } else {
+          await setDoc(doc(db, 'savedOffers', docId), {
+            userId: auth.currentUser.uid,
+            noticeId,
+            createdAt: serverTimestamp(),
+          });
+          const targetNotice = (listings || []).find((entry) => entry.id === noticeId);
+          if (targetNotice) {
+            trackListingSaved({
+              listing: targetNotice,
+              surface: 'feed',
+              authState: 'signed_in',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Could not update saved offer', error);
+        alert('Could not save this offer right now.');
+      } finally {
+        window.clearTimeout(saveToggleTimeoutRef.current[noticeId]);
+        delete saveToggleTimeoutRef.current[noticeId];
+        setSavingOfferIds((current) => {
+          const next = { ...current };
+          delete next[noticeId];
+          return next;
         });
       }
-    } catch (error) {
-      console.error('Could not update saved offer', error);
-      alert('Could not save this offer right now.');
-    } finally {
-      setSavingOfferId('');
-    }
+    }, SAVE_TOGGLE_DEBOUNCE_MS);
   };
 
   const openReserveModal = (notice) => {
@@ -432,29 +545,20 @@ export default function Feed({
     setIsReserveSubmitting(true);
     setReserveError('');
     try {
-      await addDoc(collection(db, 'dealRequests'), {
-        noticeId: reserveNotice.id,
-        noticeTitle: reserveNotice.title || 'Listing',
-        noticePhotoUrl: reserveNotice.photoUrl || '',
-        sellerId: reserveNotice.sellerId || '',
-        sellerName: reserveNotice.sellerName || '',
-        buyerId: auth.currentUser.uid,
-        buyerName: userProfile?.displayName || auth.currentUser.displayName || 'Community member',
+      await createReserveRequest({
+        db,
+        notice: reserveNotice,
+        currentUser: auth.currentUser,
+        buyerProfile: userProfile,
         buyerPhone,
-        buyerSchool: userProfile?.primarySchool || '',
-        preferredMeetup: reserveForm.preferredMeetup.trim(),
-        preferredTime: reserveForm.preferredTime.trim(),
-        note: reserveForm.note.trim(),
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        reserveForm,
       });
       setReservedNoticeIds((prev) => (prev.includes(reserveNotice.id) ? prev : [...prev, reserveNotice.id]));
       closeReserveModal();
       alert('Reserve request sent to seller.');
     } catch (error) {
       console.error('Failed to send reserve request', error);
-      setReserveError('Could not send reserve request right now.');
+      setReserveError(error?.message || 'Could not send reserve request right now.');
     } finally {
       setIsReserveSubmitting(false);
     }
@@ -476,14 +580,35 @@ export default function Feed({
 
   const normalizeText = (value) => (value || '').toString().toLowerCase();
   const formatLabelValue = (label, value) => `${label}: ${value}`;
-  const getCategoryLabel = (category) => category;
+  const getCategoryChipLabel = (category) => (category ? `${category} listing` : 'Book listing');
+  const formatPriceLabel = (price) => (Number(price) === 0 ? 'Free' : `Rs ${Number(price || 0).toLocaleString('en-IN')}`);
+  const isSellerVerified = (notice = {}) => notice?.sellerVerificationStatus === 'basic-self-declared';
+  const getSellerRoleLabel = (notice = {}) => {
+    const normalizedRole = String(notice?.sellerRole || '').trim().toLowerCase();
+    if (normalizedRole === 'student') return 'Student seller';
+    if (normalizedRole === 'parent' || normalizedRole === 'guardian') return 'Parent seller';
+    if (notice?.sellerSchool || notice?.school) return 'Student seller';
+    return 'Local seller';
+  };
+  const getListingPreview = (notice = {}) =>
+    String(
+      notice.description
+      || notice.successNote
+      || `Pickup in ${getListingLocationLabel(notice)}. Ask about edition, quantity, and condition before you meet.`
+    ).trim();
+  const getKeyInfoChips = (notice = {}) =>
+    [
+      notice.classGrade ? `Class ${notice.classGrade}` : '',
+      notice.condition || '',
+      getListingLocationLabel(notice),
+    ].filter(Boolean);
   const getMetadataChips = (notice) => {
     const chips = [];
     if (notice.condition) chips.push(formatLabelValue('Condition', notice.condition));
     if (notice.subject) chips.push(formatLabelValue('Subject', notice.subject));
     return chips;
   };
-  const sellerStatsMap = (notices || []).reduce((acc, notice) => {
+  const sellerStatsMap = (listings || []).reduce((acc, notice) => {
     if (!notice?.sellerId) return acc;
     if (!acc[notice.sellerId]) {
       acc[notice.sellerId] = { total: 0, sold: 0 };
@@ -496,35 +621,27 @@ export default function Feed({
   }, {});
 
   const getTrustLine = (notice) => {
-    const profile = sellerProfiles[notice.sellerId] || {};
-    const hasProfileData = Object.keys(profile).length > 0;
     const stats = sellerStatsMap[notice.sellerId] || { total: 0, sold: 0 };
-    if (!hasProfileData) {
-      return `Verified account | ${stats.sold} successful exchanges`;
-    }
-    const verifiedPart = profile.isVerifiedParent === false ? 'Unverified profile' : 'Verified profile';
-    const visibilityPart = profile.publicProfile === false ? 'Private profile' : 'Public profile';
-    const completionSignals = [
-      profile.primarySchool,
-      profile.colony,
-      profile.preferredMeetup,
-      profile.availability,
-      profile.bio,
-    ].filter((value) => Boolean((value || '').toString().trim())).length;
-    const completionPart = completionSignals >= 3 ? 'Profile details added' : 'Basic profile details';
-    return `${verifiedPart} | ${visibilityPart} | ${completionPart} | ${stats.sold} successful exchanges`;
+    const verificationPart = getSellerVerificationLabel(notice);
+    const visibilityPart = notice?.sellerSchool ? 'School visible' : 'School hidden';
+    const contactPart = 'In-app chat only';
+    return `${verificationPart} | ${visibilityPart} | ${contactPart} | ${stats.sold} successful exchanges`;
   };
 
   const sanitizeTrustLine = (value) => (value || '').replaceAll('Ã¢â‚¬Â¢', '|').replaceAll('â€¢', '|').replaceAll('•', '|');
-  const buildGhostWord = (value) => {
-    const clean = (value || 'BOOKS').replace(/[^a-z0-9 ]/gi, ' ').trim();
-    const firstWord = clean.split(/\s+/)[0] || 'BOOKS';
-    return firstWord.toUpperCase().slice(0, 10);
-  };
   const getNoticeImageUrls = (notice) => {
     const listed = Array.isArray(notice?.photoUrls) ? notice.photoUrls.filter(Boolean) : [];
     if (listed.length > 0) return listed;
     return notice?.photoUrl ? [notice.photoUrl] : [];
+  };
+  const matchesPriceFilter = (notice, currentPriceFilter) => {
+    if (currentPriceFilter === 'all') return true;
+    const priceValue = Number(notice?.price || 0) || 0;
+    if (currentPriceFilter === 'free') return priceValue === 0;
+    if (currentPriceFilter === 'under200') return priceValue > 0 && priceValue < 200;
+    if (currentPriceFilter === '200to500') return priceValue >= 200 && priceValue <= 500;
+    if (currentPriceFilter === 'over500') return priceValue > 500;
+    return true;
   };
   const getCardImageIndex = (noticeId, imageCount) => {
     if (imageCount <= 1) return 0;
@@ -543,31 +660,47 @@ export default function Feed({
   const normalizedUserColony = normalizeText(userProfile?.colony);
   const searchTerm = normalizeText(searchQuery).trim();
   const recencyCutoffMs = getRecencyCutoffMs(recencyFilter);
+  const allBookNotices = (listings || []).filter((notice) => notice.category === 'Books');
+  const classOptions = buildClassExamOptions(allBookNotices);
+  const locationOptions = ['all', ...new Set(allBookNotices.map((notice) => (notice.colony || '').trim()).filter(Boolean))];
 
-  const processedNotices = (notices || [])
+  const processedNotices = (listings || [])
     .filter((notice) => !reportedItems.includes(notice.id))
     .filter((notice) => {
       const status = notice.status || 'active';
-      return showSold ? true : status !== 'sold';
+      return status !== 'sold';
     })
     .filter((notice) => notice.category === 'Books')
     .filter((notice) => {
       if (!schoolFilter) return true;
-      const noticeSchool = normalizeSchoolInput(notice.school || sellerProfiles[notice.sellerId]?.primarySchool || '');
+      const noticeSchool = normalizeSchoolInput(notice.school || notice.sellerSchool || '');
       return noticeSchool === schoolFilter;
     })
     .filter((notice) => {
       if (!searchTerm) return true;
       const keywordText = Array.isArray(notice.keywords) ? notice.keywords.join(' ') : notice.keywords || '';
       const searchableText = normalizeText(
-        `${notice.title || ''} ${notice.school || ''} ${notice.category || ''} ${notice.successNote || ''} ${notice.classGrade || ''} ${notice.subject || ''} ${notice.size || ''} ${notice.condition || ''} ${keywordText}`
+        `${notice.title || ''} ${notice.description || ''} ${notice.school || ''} ${notice.category || ''} ${notice.successNote || ''} ${notice.classGrade || ''} ${notice.subject || ''} ${notice.size || ''} ${notice.condition || ''} ${keywordText}`
       );
       return searchableText.includes(searchTerm) || fuzzyMatchText(searchableText, searchTerm);
     })
     .filter((notice) => {
+      if (classFilter === 'all') return true;
+      return normalizeClassExamLabel(notice.classGrade || '') === classFilter;
+    })
+    .filter((notice) => matchesPriceFilter(notice, priceFilter))
+    .filter((notice) => {
       if (!recencyCutoffMs) return true;
       const createdMs = notice.createdAt?.toMillis?.() || notice.createdAt?.toDate?.()?.getTime?.() || 0;
       return createdMs >= recencyCutoffMs;
+    })
+    .filter((notice) => {
+      if (locationFilter === 'all') return true;
+      if (locationFilter === 'myArea') {
+        if (!normalizedUserColony) return true;
+        return normalizeText(notice.colony) === normalizedUserColony;
+      }
+      return normalizeText(notice.colony) === normalizeText(locationFilter);
     })
     .filter((notice) => {
       if (colonyFilter === 'all') return true;
@@ -604,182 +737,138 @@ export default function Feed({
       if (aMatches !== bMatches) return bMatches - aMatches;
       return timeB - timeA;
     });
-  const hasLiveListings = processedNotices.length > 0;
-  const previewFilteredNotices = DEMO_LISTINGS
-    .filter((notice) => notice.category === 'Books')
-    .filter((notice) => {
-      if (!searchTerm) return true;
-      const searchableText = normalizeText(
-        `${notice.title || ''} ${notice.school || ''} ${notice.category || ''} ${notice.successNote || ''} ${notice.classGrade || ''} ${notice.subject || ''} ${notice.size || ''} ${notice.condition || ''}`
-      );
-      return searchableText.includes(searchTerm) || fuzzyMatchText(searchableText, searchTerm);
-    });
-  const baseRenderedNotices = hasLiveListings ? processedNotices : previewFilteredNotices;
+  const baseRenderedNotices = processedNotices;
   const renderedNotices = showSavedOnly ? baseRenderedNotices.filter((notice) => savedOffers.includes(notice.id)) : baseRenderedNotices;
-  const bookNotices = renderedNotices.filter((notice) => notice.category === 'Books');
-  const bookSubjectOptions = ['all', ...new Set(bookNotices.map((notice) => (notice.subject || '').trim()).filter(Boolean))];
-  const filteredBookNotices = bookNotices.filter((notice) => {
-    if (bookSubjectFilter !== 'all' && (notice.subject || '').trim() !== bookSubjectFilter) return false;
-    return true;
-  });
-
-  useEffect(() => {
-    if (filteredBookNotices.length === 0) {
-      setFeaturedBookIndex(0);
-      return;
-    }
-    setFeaturedBookIndex((prev) => Math.min(prev, filteredBookNotices.length - 1));
-  }, [filteredBookNotices.length]);
-
-  const featuredBook = filteredBookNotices[featuredBookIndex] || null;
-  const featuredStatusMeta = getStatusMeta(featuredBook?.status || 'active');
-  const featuredMetadata = featuredBook ? getMetadataChips(featuredBook) : [];
-  const featuredTrust = featuredBook ? sanitizeTrustLine(getTrustLine(featuredBook)) : '';
-  const featuredSaved = featuredBook ? savedOffers.includes(featuredBook.id) : false;
-  const featuredIsSaving = !!(featuredBook && savingOfferId === featuredBook.id);
-  const featuredGhostWord = buildGhostWord(featuredBook?.title || 'Books');
-  const featuredCountLabel =
-    filteredBookNotices.length > 0
-      ? `${String(featuredBookIndex + 1).padStart(2, '0')} / ${String(filteredBookNotices.length).padStart(2, '0')}`
-      : '00 / 00';
-  const featuredLocationLine = featuredBook?.school
-    ? featuredBook.school
-    : featuredBook
-      ? `City-wide exchange across ${NETWORK_CITY}`
-      : 'Library showcase loading';
-  const featuredConnectLink = featuredBook
-    ? generateWhatsAppLink(featuredBook.sellerPhone || '', featuredBook.title, featuredBook.school, 'EN', featuredBook.successNote)
-    : null;
-  const featuredIsSelfListing = !!(featuredBook && auth.currentUser?.uid && featuredBook.sellerId === auth.currentUser.uid);
-  const featuredReserveSent = !!(featuredBook && reservedNoticeIds.includes(featuredBook.id));
-  const featuredCanReserve = !!(featuredBook && (featuredBook.status || 'active') === 'active' && !featuredIsSelfListing);
-  const visibleSavedCount = baseRenderedNotices.filter((notice) => savedOffers.includes(notice.id)).length;
-  const recentNotices = renderedNotices.filter((notice) => {
-    const createdMs = notice.createdAt?.toMillis?.() || notice.createdAt?.toDate?.()?.getTime?.() || 0;
-    return createdMs >= Date.now() - 24 * 60 * 60 * 1000;
-  });
   const visibleNotices = renderedNotices.slice(0, visibleNoticeCount);
-  const hasMoreNotices = renderedNotices.length > visibleNotices.length;
+  const hasMoreListingsInView = renderedNotices.length > visibleNotices.length || hasMoreListings;
 
   useEffect(() => {
     setVisibleNoticeCount(12);
-  }, [categoryFilter, schoolFilter, searchTerm, recencyFilter, sortMode, colonyFilter, showSold, showSavedOnly, notices?.length]);
+  }, [schoolFilter, searchTerm, recencyFilter, sortMode, classFilter, priceFilter, locationFilter, colonyFilter, showSavedOnly, listings?.length]);
 
-  const loadMoreNotices = () => {
-    setVisibleNoticeCount((prev) => Math.min(prev + 12, renderedNotices.length));
+  const loadMoreListings = async () => {
+    const nextVisibleCount = visibleNoticeCount + 12;
+    if (nextVisibleCount > renderedNotices.length && hasMoreListings && typeof onLoadMoreListings === 'function') {
+      await onLoadMoreListings();
+    }
+    setVisibleNoticeCount((prev) => prev + 12);
   };
 
-  const shiftFeaturedBook = (direction) => {
-    if (filteredBookNotices.length <= 1) return;
-    setFeaturedBookIndex((prev) => {
-      const nextIndex = prev + direction;
-      if (nextIndex < 0) return filteredBookNotices.length - 1;
-      if (nextIndex >= filteredBookNotices.length) return 0;
-      return nextIndex;
-    });
-  };
-
-  const handleStageMouseMove = (event) => {
-    if (!stageRef.current) return;
-    const rect = stageRef.current.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-    stageRef.current.style.setProperty('--book-tilt-y', `${x * 14}deg`);
-    stageRef.current.style.setProperty('--book-tilt-x', `${-y * 10}deg`);
-  };
-
-  const resetStageTilt = () => {
-    if (!stageRef.current) return;
-    stageRef.current.style.setProperty('--book-tilt-y', '0deg');
-    stageRef.current.style.setProperty('--book-tilt-x', '0deg');
-  };
-
-  const activeListingsCount = renderedNotices.filter((notice) => (notice.status || 'active') === 'active').length;
-  const liveBooksCount = renderedNotices.filter((notice) => notice.category === 'Books').length;
-  const activeFilterCount = [
-    searchTerm,
-    recencyFilter !== 'all',
-    sortMode !== 'bestMatch',
-    colonyFilter !== 'all',
-    schoolFilter,
-    showSold,
-    showSavedOnly,
-    bookSubjectFilter !== 'all',
-  ].filter(Boolean).length;
   const clearFilters = () => {
     setSearchQuery('');
     setRecencyFilter('all');
     setSortMode('bestMatch');
+    setClassFilter('all');
+    setPriceFilter('all');
+    setLocationFilter('all');
     setColonyFilter('all');
-    setCategoryFilter('Books');
     setSchoolFilter('');
-    setBookSubjectFilter('all');
-    setShowSold(false);
+    setShowSavedOnly(false);
+  };
+
+  const scrollToListings = () => {
+    listingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const openChatForNotice = (notice, surface = 'feed_card_chat') => {
+    if (!notice?.id) return;
+    if (typeof onOpenChat === 'function') {
+      onOpenChat(notice);
+      return;
+    }
+    openListing(notice.id, { listing: notice, surface });
   };
 
   return (
-    <div className="market-feed mx-auto w-full max-w-[1760px] pb-16 pt-3 lg:pb-20">
-      <>
-        <section className="mobile-toolbar mb-4 p-3 md:hidden">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-50/54">Explore books</p>
-              <h2 className="mt-1 text-lg font-semibold leading-tight text-white">{renderedNotices.length} live listings</h2>
-              <p className="mt-1 text-xs text-cyan-50/62">Built for quick book browsing, not heavy scrolling.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowSavedOnly((prev) => !prev)}
-              className={`inline-flex shrink-0 items-center rounded-full border px-3 py-2 text-xs font-semibold transition ${
-                showSavedOnly
-                  ? 'border-cyan-300/34 bg-cyan-300/[0.14] text-white'
-                  : 'border-cyan-300/18 bg-[#09111a]/78 text-cyan-50/82'
-              }`}
-            >
-              Cart {visibleSavedCount}
-            </button>
-          </div>
+    <div className="market-feed mx-auto w-full max-w-[1760px] pb-16 pt-1 lg:pb-20">
+      <section className="editorial-shell overflow-hidden p-2.5 sm:p-3 lg:p-3">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_10%,rgba(91,232,255,0.14),transparent_26%),radial-gradient(circle_at_86%_16%,rgba(43,127,255,0.14),transparent_28%)]" />
+        <div className="relative z-10 max-w-5xl">
+          <h1 className="font-display text-[1.45rem] font-semibold leading-[1] text-white sm:text-[1.7rem] lg:text-[1.95rem] xl:text-[2.1rem]">
+            Buy &amp; Sell School Books in {NETWORK_CITY}
+          </h1>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-cyan-50/72 sm:text-[13px]">
+            Save money, no middleman, chat with sellers directly and meet locally.
+          </p>
+        </div>
+      </section>
 
-          <div className="mobile-search-shell">
-            <Search className="h-4 w-4 shrink-0 text-cyan-50/50" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search title, subject, keyword"
-              className="lux-input min-w-0 flex-1 text-sm"
-            />
-          </div>
+      <section ref={listingsRef} id="browse-books-saharanpur" className="mt-1.5 scroll-mt-32">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 className="font-display text-[1.45rem] font-semibold text-white sm:text-[1.55rem]">Browse Books</h2>
+          <span className="rounded-full border border-cyan-300/20 bg-[#07111a]/80 px-3 py-1 text-xs font-semibold text-cyan-50/85">
+            {renderedNotices.length} results
+          </span>
+        </div>
+      </section>
 
-          <div className="hide-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className={`whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold transition-all ${
-                  categoryFilter === cat
-                    ? 'bg-cyan-300 text-[#041018]'
-                    : 'border border-cyan-300/18 bg-cyan-300/[0.04] text-cyan-50/82'
-                }`}
-              >
-                {getCategoryLabel(cat)}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setShowStageFilters((prev) => !prev)}
-              className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition ${
-                showStageFilters
-                  ? 'border-cyan-300/34 bg-cyan-300/[0.14] text-white'
-                  : 'border-cyan-300/18 bg-cyan-300/[0.04] text-cyan-50/82'
-              }`}
-            >
-              Filters
-            </button>
-          </div>
-
-          <div className={`${showStageFilters ? 'grid' : 'hidden'} mt-3 gap-2`}>
+      <section className="mt-2 hidden md:block">
+        <div className="lux-panel p-3 lg:p-3">
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1.8fr)_repeat(5,minmax(0,0.72fr))]">
+            <label className="flex items-center gap-3 rounded-[0.9rem] border border-cyan-300/18 bg-[#08111a]/88 px-3.5 py-2">
+              <Search className="h-4 w-4 shrink-0 text-cyan-50/52" />
+              <input
+                name="desktop_search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search title, subject, class, condition, keyword"
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white outline-none placeholder:text-cyan-50/34"
+              />
+            </label>
             <select
+              name="desktop_class_filter"
+              value={classFilter}
+              onChange={(e) => setClassFilter(e.target.value)}
+              className="lux-select text-sm font-medium"
+            >
+              <option value="all" className="bg-[#08111a]">
+                    Classes/Exams
+              </option>
+              {classOptions
+                .filter((option) => option !== 'all')
+                .map((option) => (
+                  <option key={option} value={option} className="bg-[#08111a]">
+                    {option}
+                  </option>
+                ))}
+            </select>
+            <select
+              name="desktop_price_filter"
+              value={priceFilter}
+              onChange={(e) => setPriceFilter(e.target.value)}
+              className="lux-select text-sm font-medium"
+            >
+              {priceOptions.map((option) => (
+                <option key={option.value} value={option.value} className="bg-[#08111a]">
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              name="desktop_location_filter"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="lux-select text-sm font-medium"
+            >
+              <option value="all" className="bg-[#08111a]">
+                All locations
+              </option>
+              {userProfile?.colony && (
+                <option value="myArea" className="bg-[#08111a]">
+                  My area
+                </option>
+              )}
+              {locationOptions
+                .filter((option) => option !== 'all')
+                .map((option) => (
+                  <option key={option} value={option} className="bg-[#08111a]">
+                    {option}
+                  </option>
+                ))}
+            </select>
+            <select
+              name="desktop_sort_mode"
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value)}
               className="lux-select text-sm font-medium"
@@ -790,42 +879,207 @@ export default function Feed({
                 </option>
               ))}
             </select>
-            <div className="flex gap-2">
+            <select
+              name="desktop_recency_filter"
+              value={recencyFilter}
+              onChange={(e) => setRecencyFilter(e.target.value)}
+              className="lux-select text-sm font-medium"
+            >
+              <option value="all" className="bg-[#08111a]">
+                Any recency
+              </option>
+              {recencyOptions
+                .filter((option) => option.value !== 'all')
+                .map((option) => (
+                  <option key={option.value} value={option.value} className="bg-[#08111a]">
+                    Posted in {option.label}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setShowSold((prev) => !prev)}
-                className={`flex-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
-                  showSold
-                    ? 'border-cyan-300/34 bg-cyan-300/[0.14] text-white'
+                onClick={() => setShowSavedOnly((prev) => !prev)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  showSavedOnly
+                    ? 'border-cyan-300/38 bg-cyan-300/[0.16] text-white'
                     : 'border-cyan-300/18 bg-cyan-300/[0.04] text-cyan-50/82'
                 }`}
               >
-                {showSold ? 'Hide sold' : 'Show sold'}
-              </button>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="flex-1 rounded-full border border-cyan-300/18 bg-cyan-300/[0.04] px-3 py-2 text-xs font-semibold text-cyan-50/82"
-              >
-                Clear
+                {showSavedOnly ? 'Showing saved' : 'Saved only'}
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-full border border-cyan-300/20 bg-white/6 px-3 py-1 text-xs font-semibold text-cyan-50 transition hover:bg-white/10"
+            >
+              Clear filters
+            </button>
           </div>
-        </section>
+        </div>
+      </section>
 
-      </>
+      <section className="mobile-toolbar mb-4 mt-4 p-3 md:hidden">
+        <div className="mobile-search-shell">
+          <Search className="h-4 w-4 shrink-0 text-cyan-50/50" />
+          <input
+            name="mobile_search"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search book, subject, school, keyword"
+            className="lux-input min-w-0 flex-1 text-sm"
+          />
+        </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 [@media(min-width:1800px)]:grid-cols-5">
+        <div className="hide-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setShowStageFilters((prev) => !prev)}
+            className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition ${
+              showStageFilters
+                ? 'border-cyan-300/34 bg-cyan-300/[0.14] text-white'
+                : 'border-cyan-300/18 bg-cyan-300/[0.04] text-cyan-50/82'
+            }`}
+          >
+            Filters
+          </button>
+        </div>
+
+        <div className={`${showStageFilters ? 'grid' : 'hidden'} mt-3 gap-2`}>
+          <select
+            name="mobile_class_filter"
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+            className="lux-select text-sm font-medium"
+          >
+            <option value="all" className="bg-[#08111a]">
+                    Classes/Exams
+            </option>
+            {classOptions
+              .filter((option) => option !== 'all')
+              .map((option) => (
+                <option key={option} value={option} className="bg-[#08111a]">
+                  {option}
+                </option>
+              ))}
+          </select>
+          <select
+            name="mobile_price_filter"
+            value={priceFilter}
+            onChange={(e) => setPriceFilter(e.target.value)}
+            className="lux-select text-sm font-medium"
+          >
+            {priceOptions.map((option) => (
+              <option key={option.value} value={option.value} className="bg-[#08111a]">
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            name="mobile_location_filter"
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+            className="lux-select text-sm font-medium"
+          >
+            <option value="all" className="bg-[#08111a]">
+              All locations
+            </option>
+            {userProfile?.colony && (
+              <option value="myArea" className="bg-[#08111a]">
+                My area
+              </option>
+            )}
+            {locationOptions
+              .filter((option) => option !== 'all')
+              .map((option) => (
+                <option key={option} value={option} className="bg-[#08111a]">
+                  {option}
+                </option>
+              ))}
+          </select>
+          <select
+            name="mobile_sort_mode"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value)}
+            className="lux-select text-sm font-medium"
+          >
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value} className="bg-[#08111a]">
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            name="mobile_recency_filter"
+            value={recencyFilter}
+            onChange={(e) => setRecencyFilter(e.target.value)}
+            className="lux-select text-sm font-medium"
+          >
+            {recencyOptions.map((option) => (
+              <option key={option.value} value={option.value} className="bg-[#08111a]">
+                {option.value === 'all' ? 'Any recency' : `Posted in ${option.label}`}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSavedOnly((prev) => !prev)}
+              className={`flex-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                showSavedOnly
+                  ? 'border-cyan-300/34 bg-cyan-300/[0.14] text-white'
+                  : 'border-cyan-300/18 bg-cyan-300/[0.04] text-cyan-50/82'
+              }`}
+            >
+              {showSavedOnly ? 'Saved on' : 'Saved only'}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-full border border-cyan-300/18 bg-cyan-300/[0.04] px-3 py-2 text-xs font-semibold text-cyan-50/82"
+          >
+            Clear filters
+          </button>
+        </div>
+      </section>
+
+      <div className="mt-3 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:1800px)]:grid-cols-5">
         {renderedNotices.length === 0 ? (
+          isListingsLoading ? (
+            <div className="lux-panel col-span-full flex min-h-[240px] items-center justify-center px-6 py-16 text-center text-sm font-semibold text-cyan-50/78">
+              Loading listings...
+            </div>
+          ) : listingsLoadError ? (
+            <div className="lux-panel relative col-span-full overflow-hidden px-6 py-16 text-center">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(255,112,112,0.12),transparent_56%),linear-gradient(180deg,rgba(4,10,16,0.18),rgba(3,7,12,0.28))]" />
+              <div className="relative z-10">
+                <AlertTriangle className="mx-auto mb-4 h-8 w-8 text-rose-200/80" />
+                <h3 className="font-display text-2xl font-semibold text-white">Could not load listings</h3>
+                <p className="mx-auto mt-2 max-w-2xl text-sm text-cyan-50/78">{listingsLoadError}</p>
+                <p className="mx-auto mt-2 max-w-xl text-xs text-cyan-50/58">
+                  This usually means the Firestore query failed, often because an index is missing or the deployed rules do not match the query.
+                </p>
+              </div>
+            </div>
+          ) : (
           <div className="lux-panel relative col-span-full overflow-hidden px-6 py-16 text-center">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(91,232,255,0.16),transparent_56%),linear-gradient(180deg,rgba(4,10,16,0.18),rgba(3,7,12,0.28))]" />
             <div className="relative z-10">
               <AlertTriangle className="mx-auto mb-4 h-8 w-8 text-cyan-300/70" />
-              <h3 className="font-display text-2xl font-semibold text-white">{showSavedOnly ? 'No saved offers yet' : 'No listings yet'}</h3>
+              <h3 className="font-display text-2xl font-semibold text-white">
+                {showSavedOnly ? 'No saved offers yet' : 'No books listed yet in Saharanpur'}
+              </h3>
               <p className="mx-auto mt-2 max-w-xl text-sm text-cyan-50/78">
                 {showSavedOnly
                   ? 'Save offers from Explore to build your shortlist here.'
-                  : `Be first to post an item in ${NETWORK_CITY}, or check requests from students who are already looking for one.`}
+                  : 'Be the first to help other students save money'}
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 {showSavedOnly && (
@@ -840,20 +1094,34 @@ export default function Feed({
                   onClick={() => onStartListing && onStartListing()}
                   className="rounded-full bg-cyan-300 px-5 py-2.5 text-sm font-semibold text-[#041018] transition hover:brightness-105"
                 >
-                  List New Item
-                </button>
-                <button
-                  onClick={() => onOpenRequests && onOpenRequests()}
-                  className="rounded-full border border-cyan-300/30 px-5 py-2.5 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-300/[0.1]"
-                >
-                  View Requests
+                  Sell Your Books
                 </button>
               </div>
+              {!showSavedOnly ? (
+                <div className="mx-auto mt-8 max-w-sm rounded-[1.7rem] border border-cyan-300/14 bg-[linear-gradient(160deg,rgba(9,14,22,0.96),rgba(14,20,32,0.92))] p-4 text-left shadow-[0_32px_80px_-44px_rgba(0,0,0,0.95)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100/62">Example listing</p>
+                  <div className="mt-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="font-display line-clamp-2 text-lg font-semibold text-white">NCERT Physics Part 1</h4>
+                      <p className="mt-2 text-sm text-cyan-50/72">Class 11</p>
+                    </div>
+                    <p className="shrink-0 text-lg font-semibold text-cyan-100">Rs 250</p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1 text-[11px] font-semibold text-cyan-50/76">
+                      Saharanpur
+                    </span>
+                    <span className="rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1 text-[11px] font-semibold text-cyan-50/76">
+                      Good condition
+                    </span>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
+          )
         ) : (
-          visibleNotices.map((notice) => {
-            const isPreview = notice._isPreview === true;
+          visibleNotices.map((notice, index) => {
             const status = notice.status || 'active';
             const statusMeta = getStatusMeta(status);
             const metadataChips = getMetadataChips(notice);
@@ -861,174 +1129,212 @@ export default function Feed({
             const imageCount = imageUrls.length;
             const imageIndex = getCardImageIndex(notice.id, imageCount);
             const activeImage = imageUrls[imageIndex] || '';
-            const trustLine = isPreview ? 'Curated preview listing | Demo mode' : sanitizeTrustLine(getTrustLine(notice));
-            const connectLink = isPreview ? '' : generateWhatsAppLink(notice.sellerPhone || '', notice.title, notice.school, 'EN', notice.successNote);
+            const showActiveImage = Boolean(activeImage) && !isImageBroken(notice.id, activeImage);
+            const trustLine = sanitizeTrustLine(getTrustLine(notice));
             const sellerStats = sellerStatsMap[notice.sellerId] || { sold: 0, total: 0 };
+            const sellerDisplayName = notice.sellerName || 'Community member';
+            const sellerRoleLabel = getSellerRoleLabel(notice);
+            const sellerVerified = isSellerVerified(notice);
+            const keyInfoChips = getKeyInfoChips(notice);
+            const listingPreview = getListingPreview(notice);
+            const priceLabel = formatPriceLabel(notice.price);
+            const locationLabel = getListingLocationLabel(notice);
             const isSelfListing = !!(auth.currentUser?.uid && auth.currentUser.uid === notice.sellerId);
             const reserveSent = reservedNoticeIds.includes(notice.id);
             const offerSaved = savedOffers.includes(notice.id);
-            const offerSaving = savingOfferId === notice.id;
+            const offerSaving = Boolean(savingOfferIds[notice.id]);
+            const isSetListing = (notice.listingType || 'single') === 'set';
+            const classLabel = notice.classGrade ? `Class ${notice.classGrade}` : 'Class not listed';
+            const cardLocation = String(notice.colony || '').trim();
+            const compactTitle = notice.classGrade ? `${notice.title} - Class ${notice.classGrade}` : notice.title;
 
             return (
               notice.category === 'Books' ? (
               <React.Fragment key={notice.id}>
-              <article className="mobile-list-card group relative overflow-hidden p-0 md:hidden">
+              <article
+                className="mobile-list-card group relative overflow-hidden p-0 transition-transform duration-200 active:scale-[0.99] md:hidden"
+                onClick={() => openListing(notice.id, { listing: notice, index, surface: 'mobile_card' })}
+              >
                 <button
-                  onClick={() => !isPreview && handleReport(notice)}
-                  className={`absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                    isPreview
-                      ? 'bg-emerald-200/20 text-emerald-100 opacity-100'
-                      : 'bg-black/50 text-cyan-50/75'
-                  }`}
-                  title={isPreview ? 'Preview listing' : 'Report Listing'}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleReport(notice);
+                  }}
+                  className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-cyan-50/75 transition-all"
+                  title="Report Listing"
                 >
-                  {isPreview ? <ShieldCheck className="h-3.5 w-3.5" /> : <Flag className="h-3.5 w-3.5" />}
+                  <Flag className="h-3.5 w-3.5" />
                 </button>
 
-                <div className="flex items-stretch">
-                  <div className="relative w-[34%] max-w-[118px] min-w-[104px] shrink-0 overflow-hidden border-r border-cyan-300/10 bg-[linear-gradient(180deg,#0d1722,#08111a)]">
-                    <div className="aspect-[2.8/4.15] w-full">
-                      {activeImage ? (
+                <div className="flex h-full flex-col">
+                  <div className="relative overflow-hidden bg-[linear-gradient(180deg,#0d1722,#08111a)]">
+                    <div className="listing-card-media aspect-[4/5] w-full">
+                      {showActiveImage ? (
                         <div className="mobile-list-card__cover h-full w-full">
                           <img
                             src={activeImage}
                             alt={notice.title}
-                            className="h-full w-full object-cover object-center"
+                            className="mobile-list-card__image h-full w-full"
+                            onError={() => markImageBroken(notice.id, activeImage)}
+                            loading="lazy"
+                            decoding="async"
+                            sizes="(max-width: 768px) 40vw, 160px"
                           />
                         </div>
                       ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#0a141f] to-[#08111a] text-cyan-50/60">
+                        <div className="listing-card-placeholder h-full w-full">
                           <PackageOpen className="mb-2 h-7 w-7" />
-                          <span className="px-2 text-center text-[11px]">No image</span>
+                          <span className="px-2 text-center text-[11px]">Book image unavailable</span>
                         </div>
                       )}
                     </div>
+                    {imageCount > 1 && (
+                      <>
+                        <div className="absolute right-2 top-2 rounded-full border border-cyan-300/30 bg-black/65 px-2 py-1 text-[10px] font-semibold text-cyan-50/92">
+                          {imageIndex + 1}/{imageCount}
+                        </div>
+                        <div className="absolute inset-x-2 bottom-2 z-10 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              shiftCardImage(notice.id, imageCount, -1);
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-cyan-300/35 bg-black/65 text-cyan-50 transition hover:bg-black/85"
+                            aria-label="Previous photo"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              shiftCardImage(notice.id, imageCount, 1);
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-cyan-300/35 bg-black/65 text-cyan-50 transition hover:bg-black/85"
+                            aria-label="Next photo"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
                     <div className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold ${statusMeta.badgeClass}`}>
                       {statusMeta.label}
                     </div>
-                    {isPreview && (
-                      <div className="absolute bottom-2 left-2 rounded-full border border-emerald-200/45 bg-emerald-200/20 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-100">
-                        Demo
-                      </div>
-                    )}
                   </div>
 
                   <div className="min-w-0 flex-1 px-3 py-3 pr-9">
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="line-clamp-2 text-[1rem] font-semibold leading-tight text-white">
-                        {notice.title}
-                      </h3>
-                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-50/38">
-                        Books
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openListing(notice.id, { listing: notice, index, surface: 'mobile_card_title' })}
+                        className="min-w-0 text-left"
+                      >
+                        <h3 className="line-clamp-2 text-[0.98rem] font-semibold leading-tight text-white transition hover:text-cyan-100">
+                          {compactTitle}
+                        </h3>
+                      </button>
+                      <p className="shrink-0 text-[1.2rem] font-black tracking-[-0.02em] text-cyan-100">{priceLabel}</p>
                     </div>
-                    <p className="mt-1 text-[12px] text-cyan-50/60">
-                      {notice.subject || 'General'}{notice.colony ? ` • ${notice.colony}` : ''}
-                    </p>
-                    <p className="mt-2 text-[12px] text-cyan-50/60">
-                      by {sellerProfiles[notice.sellerId]?.displayName || notice.sellerName || 'Community member'}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-cyan-50/62">
-                      <span className="rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1">
-                        {notice.condition || 'Good condition'}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {isSetListing ? (
+                        <span className="rounded-full border border-amber-200/30 bg-amber-200/12 px-2.5 py-1 text-[11px] font-semibold text-amber-100">
+                          Book Set
+                        </span>
+                      ) : null}
+                      <span className="rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1 text-[11px] font-semibold text-cyan-50/82">
+                        {classLabel}
                       </span>
-                      <span className="rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1">
-                        {timeAgo(notice.createdAt)}
-                      </span>
+                      {cardLocation ? (
+                        <span className="rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1 text-[11px] font-semibold text-cyan-50/76">
+                          {cardLocation}
+                        </span>
+                      ) : null}
+                      {false && sellerVerified ? (
+                        <span className="rounded-full border border-emerald-200/30 bg-emerald-200/12 px-2 py-1 font-semibold text-emerald-100">
+                          Verified
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="mt-3 text-[1.9rem] font-semibold leading-none text-cyan-100">
-                      {Number(notice.price) === 0 ? 'Free' : `Rs ${notice.price}`}
+                    <p className="hidden mt-2 text-[12px] font-medium text-cyan-50/68">
+                      Seller: {sellerDisplayName}
                     </p>
-                    <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-cyan-50/65">
-                      {notice.successNote || (notice.colony ? `${notice.colony} exchange zone` : `${NETWORK_CITY} student book network`)}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => toggleSaveOffer(notice.id)}
-                      disabled={offerSaving}
-                      className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-cyan-100/40 bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-[#041018] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {offerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className={`h-4 w-4 ${offerSaved ? 'fill-current' : ''}`} />}
-                      {offerSaving ? 'Updating...' : offerSaved ? 'Added to Cart' : 'Add to Cart'}
-                    </button>
+                    <div className="mt-3 grid grid-cols-1 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openChatForNotice(notice, 'mobile_card_chat')}
+                        disabled={isSelfListing}
+                        className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-cyan-200 px-4 py-2.5 text-sm font-semibold text-[#041018] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Chat
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openChatForNotice(notice, 'mobile_card_chat_secondary')}
+                        disabled={isSelfListing}
+                        className="hidden min-h-[44px] items-center justify-center rounded-full border border-cyan-300/24 bg-white/6 px-4 py-2.5 text-sm font-semibold text-cyan-50 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        💬 Chat with Seller
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 border-t border-cyan-300/12 px-3 py-2.5 text-[11px] text-cyan-50/68">
-                  {!isPreview ? (
-                    <button
-                      type="button"
-                      onClick={() => openSellerProfile(notice)}
-                      className="rounded-full border border-cyan-300/25 px-2.5 py-2 font-semibold text-cyan-50"
-                    >
-                      Profile
-                    </button>
-                  ) : (
-                    <span className="rounded-full border border-cyan-300/12 px-2.5 py-2 text-center font-semibold text-cyan-50/42">
-                      Preview
-                    </span>
-                  )}
-                  {connectLink ? (
-                    <a
-                      href={connectLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full bg-cyan-200 px-2.5 py-2 text-center font-bold text-[#082231]"
-                    >
-                      Connect
-                    </a>
-                  ) : (
-                    <span className="rounded-full border border-cyan-300/12 px-2.5 py-2 text-center font-semibold text-cyan-50/42">
-                      Share
-                    </span>
-                  )}
-                  {!isSelfListing && !isPreview ? (
-                    <button
-                      type="button"
-                      onClick={() => openReserveModal(notice)}
-                      disabled={reserveSent}
-                      className="rounded-full border border-cyan-300/20 bg-white/6 px-2.5 py-2 font-bold text-cyan-50 disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      {reserveSent ? 'Requested' : 'Reserve'}
-                    </button>
-                  ) : (
-                    <span className="rounded-full border border-cyan-300/12 px-2.5 py-2 text-center font-semibold text-cyan-50/42">
-                      Listing
-                    </span>
-                  )}
+                <div className="grid grid-cols-2 gap-2 border-t border-cyan-300/12 px-3 py-2.5 text-[11px] text-cyan-50/68">
+                  <button
+                    type="button"
+                    onClick={() => openListing(notice.id, { listing: notice, index, surface: 'mobile_card_secondary' })}
+                    className="hidden rounded-full border border-cyan-300/25 px-2.5 py-2 font-semibold text-cyan-50"
+                  >
+                    View details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleSaveOffer(notice.id)}
+                    disabled={offerSaving}
+                    className="rounded-full border border-cyan-300/20 bg-white/6 px-2.5 py-2 text-center font-bold text-cyan-50 disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {offerSaving ? 'Saving...' : offerSaved ? 'Saved' : 'Save'}
+                  </button>
                 </div>
               </article>
 
               <article
-                className="group relative hidden h-full flex-col overflow-hidden rounded-[1.8rem] border border-cyan-300/12 bg-[linear-gradient(160deg,rgba(9,14,22,0.96),rgba(14,20,32,0.92))] p-3.5 transition-all hover:-translate-y-1.5 hover:border-cyan-300/32 hover:shadow-[0_32px_80px_-44px_rgba(0,0,0,0.95)] md:flex sm:p-4"
+                className="group relative hidden h-full cursor-pointer flex-col overflow-hidden rounded-[1.8rem] border border-cyan-300/12 bg-[linear-gradient(160deg,rgba(9,14,22,0.96),rgba(14,20,32,0.92))] p-3.5 transition-all hover:-translate-y-1 hover:scale-[1.01] hover:border-cyan-300/32 hover:shadow-[0_32px_80px_-44px_rgba(0,0,0,0.95)] md:flex sm:p-4"
+                onClick={() => openListing(notice.id, { listing: notice, index, surface: 'desktop_card' })}
               >
               <button
-                onClick={() => !isPreview && handleReport(notice)}
-                className={`absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                  isPreview
-                    ? 'bg-emerald-200/20 text-emerald-100 opacity-100'
-                    : 'bg-black/50 text-cyan-50/75 opacity-0 hover:bg-rose-500/85 hover:text-white group-hover:opacity-100'
-                }`}
-                title={isPreview ? 'Preview listing' : 'Report Listing'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleReport(notice);
+                }}
+                className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-cyan-50/75 opacity-0 transition-all hover:bg-rose-500/85 hover:text-white group-hover:opacity-100"
+                title="Report Listing"
               >
-                {isPreview ? <ShieldCheck className="h-3.5 w-3.5" /> : <Flag className="h-3.5 w-3.5" />}
+                <Flag className="h-3.5 w-3.5" />
               </button>
 
-              <div className="relative mb-3 aspect-[4/4.7] overflow-hidden rounded-[1.35rem] border border-cyan-300/10 bg-[#071019] shadow-[0_20px_50px_-34px_rgba(0,0,0,0.9)]">
-                {activeImage ? (
+              <div className="listing-card-media relative mb-3 aspect-[4/5] overflow-hidden rounded-[1.35rem] border border-cyan-300/10 bg-[#071019] shadow-[0_20px_50px_-34px_rgba(0,0,0,0.9)]">
+                {showActiveImage ? (
                   <img
                     src={activeImage}
                     alt={notice.title}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    onError={() => markImageBroken(notice.id, activeImage)}
+                    loading="lazy"
+                    decoding="async"
+                    sizes="(min-width: 1800px) 18vw, (min-width: 1280px) 22vw, (min-width: 640px) 32vw, 100vw"
                   />
                 ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#0a141f] to-[#08111a] text-cyan-50/60">
+                  <div className="listing-card-placeholder h-full w-full">
                     <PackageOpen className="mb-2 h-8 w-8" />
-                    <span className="text-xs">No image uploaded</span>
+                    <span className="text-xs">Book image unavailable</span>
                   </div>
                 )}
 
-                {activeImage && (
+                {showActiveImage && (
                   <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(12,8,4,0.08),rgba(12,8,4,0.6))]" />
                 )}
 
@@ -1040,7 +1346,10 @@ export default function Feed({
                     <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => shiftCardImage(notice.id, imageCount, -1)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          shiftCardImage(notice.id, imageCount, -1);
+                        }}
                         className="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-300/35 bg-black/65 text-cyan-50 transition hover:bg-black/85"
                         aria-label="Previous photo"
                       >
@@ -1048,7 +1357,10 @@ export default function Feed({
                       </button>
                       <button
                         type="button"
-                        onClick={() => shiftCardImage(notice.id, imageCount, 1)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          shiftCardImage(notice.id, imageCount, 1);
+                        }}
                         className="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-300/35 bg-black/65 text-cyan-50 transition hover:bg-black/85"
                         aria-label="Next photo"
                       >
@@ -1058,123 +1370,85 @@ export default function Feed({
                   </>
                 )}
 
-                <div className="absolute bottom-3 left-3 rounded-xl bg-black/70 px-3 py-1.5 text-xs font-bold text-cyan-50 backdrop-blur">
-                  {Number(notice.price) === 0 ? 'Gifted Item' : `Rs ${notice.price}`}
-                </div>
                 <div className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.badgeClass}`}>
                   {statusMeta.label}
                 </div>
-                {isPreview && (
-                  <div className="absolute right-3 top-3 rounded-full border border-emerald-200/45 bg-emerald-200/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-100">
-                    Demo
-                  </div>
-                )}
               </div>
 
               <div className="flex flex-1 flex-col px-1">
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-display line-clamp-2 text-[1.08rem] font-semibold leading-tight text-white">
-                    {notice.title}
-                  </h3>
-                  <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-50/46">{getCategoryLabel(notice.category)}</p>
-                </div>
-                <p className="mt-1 text-xs text-cyan-50/65">
-                  {notice.colony ? `${notice.colony} exchange zone` : `${NETWORK_CITY} student book network.`}
-                </p>
-                {notice.colony && notice.colony === userProfile?.colony && (
-                  <p className="mt-2 inline-flex rounded-full bg-cyan-300/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#041018]">
-                    Walking Distance
-                  </p>
-                )}
-                {metadataChips.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {metadataChips.slice(0, 2).map((chip) => (
-                      <span
-                        key={`${notice.id}-${chip}`}
-                        className="rounded-full border border-cyan-300/25 bg-[#07111a] px-2.5 py-1 text-[10px] font-semibold text-cyan-50/88"
-                      >
-                        {chip}
-                      </span>
-                    ))}
+                  <div className="min-w-0">
+                    <h3 className="font-display line-clamp-2 text-[1.08rem] font-semibold leading-tight text-white">
+                      {compactTitle}
+                    </h3>
+                    <p className="hidden mt-2 text-sm font-medium text-cyan-50/72">Seller: {sellerDisplayName}</p>
                   </div>
-                )}
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-300/25 bg-[#07111a] text-cyan-50/80">
-                      <User className="h-3.5 w-3.5" />
+                  <p className="shrink-0 text-[1.55rem] font-black tracking-[-0.03em] text-cyan-100">{priceLabel}</p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {isSetListing ? (
+                    <span className="rounded-full border border-amber-200/30 bg-amber-200/12 px-2.5 py-1 text-[10px] font-semibold text-amber-100">
+                      Full Set
                     </span>
-                    <p className="truncate text-xs font-semibold text-cyan-50/82">
-                      {sellerProfiles[notice.sellerId]?.displayName || notice.sellerName || 'Community member'}
-                    </p>
-                  </div>
-                  {!isPreview && (
-                    <button
-                      type="button"
-                      onClick={() => openSellerProfile(notice)}
-                      className="inline-flex items-center gap-1 rounded-full border border-cyan-300/35 px-2.5 py-1 text-[11px] font-semibold text-cyan-50 transition hover:bg-cyan-300/[0.1]"
-                    >
-                      Profile
-                    </button>
-                  )}
-                </div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-cyan-300/25 bg-[#07111a] px-2.5 py-0.5 text-[10px] font-semibold text-cyan-50/84">
-                    {sellerProfiles[notice.sellerId]?.role || 'Parent'}
+                  ) : null}
+                  <span className="rounded-full border border-cyan-300/20 bg-[#07111a] px-2.5 py-1 text-[10px] font-semibold text-cyan-50/88">
+                    {classLabel}
                   </span>
-                  <span className="rounded-full border border-emerald-200/30 bg-emerald-200/12 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-100">
-                    {sellerStats.sold} exchanges
-                  </span>
+                  {cardLocation ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/20 bg-[#07111a] px-2.5 py-1 text-[10px] font-semibold text-cyan-50/82">
+                      <MapPin className="h-3.5 w-3.5 text-cyan-100/72" />
+                      {cardLocation}
+                    </span>
+                  ) : null}
+                  {false && sellerVerified ? (
+                    <span className="rounded-full border border-emerald-200/30 bg-emerald-200/12 px-2.5 py-1 text-[10px] font-semibold text-emerald-100">
+                      Verified
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-cyan-50/65">{trustLine}</p>
               </div>
 
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-cyan-300/12 pt-3">
-                  <div className="flex items-center gap-1.5 rounded-full border border-cyan-300/18 bg-[#07111a]/70 px-2.5 py-1 text-xs font-medium text-cyan-50/75">
+                <div className="mt-auto border-t border-cyan-300/12 pt-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openChatForNotice(notice, 'desktop_card_chat')}
+                      disabled={isSelfListing}
+                      className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-full bg-cyan-200 px-4 py-2 text-sm font-semibold text-[#082231] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Chat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openChatForNotice(notice, 'desktop_card_chat_secondary')}
+                      disabled={isSelfListing}
+                      className="hidden min-h-[42px] items-center justify-center rounded-full border border-cyan-300/20 bg-white/6 px-4 py-2 text-sm font-semibold text-cyan-50 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      💬 Chat with Seller
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-cyan-50/48">Tap to open</span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleSaveOffer(notice.id);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/14 bg-cyan-300/[0.05] text-cyan-50/85 transition hover:bg-cyan-300/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={offerSaved ? 'Unsave offer' : 'Save offer'}
+                      disabled={offerSaving}
+                      title={offerSaved ? 'Saved offer' : 'Save offer'}
+                    >
+                      {offerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className={`h-4 w-4 ${offerSaved ? 'fill-current' : ''}`} />}
+                    </button>
+                  </div>
+                  <div className="hidden mt-3 items-center gap-1.5 text-xs text-cyan-50/62">
                     <Clock className="h-3.5 w-3.5" />
                     {timeAgo(notice.createdAt)}
                   </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleSaveOffer(notice.id)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/14 bg-cyan-300/[0.05] text-cyan-50/85 transition hover:bg-cyan-300/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
-                    aria-label={offerSaved ? 'Unsave offer' : 'Save offer'}
-                    disabled={offerSaving}
-                    title={offerSaved ? 'Saved offer' : 'Save offer'}
-                  >
-                    {offerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className={`h-4 w-4 ${offerSaved ? 'fill-current' : ''}`} />}
-                  </button>
-                  <button
-                    onClick={() => !isPreview && handleNativeShare(notice)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/14 bg-cyan-300/[0.05] text-cyan-50/85 transition hover:bg-cyan-300/[0.1]"
-                    aria-label="Share listing"
-                    disabled={isPreview}
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </button>
-                  {connectLink && (
-                    <a
-                      href={connectLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full bg-cyan-200 px-3.5 py-1.5 text-xs font-bold text-[#082231] transition hover:brightness-105"
-                    >
-                      Connect
-                    </a>
-                  )}
-                  {!isSelfListing && !isPreview && (
-                    <button
-                      type="button"
-                      onClick={() => openReserveModal(notice)}
-                      disabled={reserveSent}
-                      className="rounded-full border border-cyan-300/20 bg-white/6 px-3 py-1.5 text-xs font-bold text-cyan-50 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      {reserveSent ? 'Requested' : 'Reserve'}
-                    </button>
-                  )}
                 </div>
-              </div>
             </article>
             </React.Fragment>
             ) : (
@@ -1183,15 +1457,11 @@ export default function Feed({
                 className="group relative flex h-full flex-col overflow-hidden rounded-[1.8rem] border border-cyan-300/12 bg-[linear-gradient(160deg,rgba(9,14,22,0.96),rgba(14,20,32,0.92))] p-3.5 transition-all hover:-translate-y-1.5 hover:border-cyan-300/32 hover:shadow-[0_32px_80px_-44px_rgba(0,0,0,0.95)] sm:p-4"
               >
               <button
-                onClick={() => !isPreview && handleReport(notice)}
-                className={`absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                  isPreview
-                    ? 'bg-emerald-200/20 text-emerald-100 opacity-100'
-                    : 'bg-black/50 text-cyan-50/75 opacity-0 hover:bg-rose-500/85 hover:text-white group-hover:opacity-100'
-                }`}
-                title={isPreview ? 'Preview listing' : 'Report Listing'}
+                onClick={() => handleReport(notice)}
+                className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-cyan-50/75 opacity-0 transition-all hover:bg-rose-500/85 hover:text-white group-hover:opacity-100"
+                title="Report Listing"
               >
-                {isPreview ? <ShieldCheck className="h-3.5 w-3.5" /> : <Flag className="h-3.5 w-3.5" />}
+                <Flag className="h-3.5 w-3.5" />
               </button>
 
               <div className="relative mb-3 aspect-[4/4.7] overflow-hidden rounded-[1.35rem] border border-cyan-300/10 bg-[#071019] shadow-[0_20px_50px_-34px_rgba(0,0,0,0.9)]">
@@ -1200,6 +1470,9 @@ export default function Feed({
                     src={activeImage}
                     alt={notice.title}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    loading="lazy"
+                    decoding="async"
+                    sizes="(min-width: 1800px) 18vw, (min-width: 1280px) 22vw, (min-width: 640px) 32vw, 100vw"
                   />
                 ) : (
                   <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#0a141f] to-[#08111a] text-cyan-50/60">
@@ -1244,11 +1517,6 @@ export default function Feed({
                 <div className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.badgeClass}`}>
                   {statusMeta.label}
                 </div>
-                {isPreview && (
-                  <div className="absolute right-3 top-3 rounded-full border border-emerald-200/45 bg-emerald-200/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-100">
-                    Demo
-                  </div>
-                )}
               </div>
 
               <div className="flex flex-1 flex-col px-1">
@@ -1256,7 +1524,7 @@ export default function Feed({
                   <h3 className="font-display line-clamp-2 text-[1.08rem] font-semibold leading-tight text-white">
                     {notice.title}
                   </h3>
-                  <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-50/46">{getCategoryLabel(notice.category)}</p>
+                  <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-50/46">{getCategoryChipLabel(notice.category)}</p>
                 </div>
                 <p className="mt-1 text-xs text-cyan-50/65">
                   {notice.colony ? `${notice.colony} exchange zone` : `${NETWORK_CITY} student book network.`}
@@ -1284,22 +1552,20 @@ export default function Feed({
                       <User className="h-3.5 w-3.5" />
                     </span>
                     <p className="truncate text-xs font-semibold text-cyan-50/82">
-                      {sellerProfiles[notice.sellerId]?.displayName || notice.sellerName || 'Community member'}
+                      {notice.sellerName || 'Community member'}
                     </p>
                   </div>
-                  {!isPreview && (
-                    <button
-                      type="button"
-                      onClick={() => openSellerProfile(notice)}
-                      className="inline-flex items-center gap-1 rounded-full border border-cyan-300/35 px-2.5 py-1 text-[11px] font-semibold text-cyan-50 transition hover:bg-cyan-300/[0.1]"
-                    >
-                      Profile
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => openListing(notice.id, { listing: notice, index, surface: 'compact_card_details' })}
+                    className="inline-flex items-center gap-1 rounded-full border border-cyan-300/35 px-2.5 py-1 text-[11px] font-semibold text-cyan-50 transition hover:bg-cyan-300/[0.1]"
+                  >
+                    Details
+                  </button>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   <span className="rounded-full border border-cyan-300/25 bg-[#07111a] px-2.5 py-0.5 text-[10px] font-semibold text-cyan-50/84">
-                    {sellerProfiles[notice.sellerId]?.role || 'Parent'}
+                    {getSellerRoleLabel(notice)}
                   </span>
                   <span className="rounded-full border border-emerald-200/30 bg-emerald-200/12 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-100">
                     {sellerStats.sold} exchanges
@@ -1326,31 +1592,29 @@ export default function Feed({
                     {offerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className={`h-4 w-4 ${offerSaved ? 'fill-current' : ''}`} />}
                   </button>
                   <button
-                    onClick={() => !isPreview && handleNativeShare(notice)}
+                    onClick={() => handleNativeShare(notice)}
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/14 bg-cyan-300/[0.05] text-cyan-50/85 transition hover:bg-cyan-300/[0.1]"
                     aria-label="Share listing"
-                    disabled={isPreview}
                   >
                     <Share2 className="h-4 w-4" />
                   </button>
-                  {connectLink && (
-                    <a
-                      href={connectLink}
-                      target="_blank"
-                      rel="noreferrer"
+                  {!isSelfListing && (
+                    <button
+                      type="button"
+                      onClick={() => openChatForNotice(notice, 'compact_card_chat')}
                       className="rounded-full bg-cyan-200 px-3.5 py-1.5 text-xs font-bold text-[#082231] transition hover:brightness-105"
                     >
-                      Connect
-                    </a>
+                      💬 Chat with Seller
+                    </button>
                   )}
-                  {!isSelfListing && !isPreview && (
+                  {!isSelfListing && (
                     <button
                       type="button"
                       onClick={() => openReserveModal(notice)}
                       disabled={reserveSent}
                       className="rounded-full border border-cyan-300/20 bg-white/6 px-3 py-1.5 text-xs font-bold text-cyan-50 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-55"
                     >
-                      {reserveSent ? 'Requested' : 'Reserve'}
+                      {reserveSent ? 'Reserve sent' : 'Reserve pickup'}
                     </button>
                   )}
                 </div>
@@ -1362,17 +1626,50 @@ export default function Feed({
         )}
       </div>
 
-      {hasMoreNotices && (
+      {hasMoreListingsInView && (
         <div className="mt-5 flex justify-center">
           <button
             type="button"
-            onClick={loadMoreNotices}
-            className="rounded-full border border-cyan-300/22 bg-[#08111a]/88 px-6 py-2.5 text-sm font-semibold text-cyan-50/86 transition hover:border-cyan-300/42 hover:bg-[#0b1824] hover:text-white"
+            onClick={loadMoreListings}
+            disabled={isLoadingMoreListings}
+            className="rounded-full border border-cyan-300/22 bg-[#08111a]/88 px-6 py-2.5 text-sm font-semibold text-cyan-50/86 transition hover:border-cyan-300/42 hover:bg-[#0b1824] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Load more listings ({renderedNotices.length - visibleNotices.length} left)
+            {isLoadingMoreListings
+              ? 'Loading more listings...'
+                : renderedNotices.length > visibleNotices.length
+                ? `Load more listings (${renderedNotices.length - visibleNotices.length} left)`
+                : 'Load more listings'}
           </button>
         </div>
       )}
+
+      {false ? (
+      <footer className="mt-6">
+        <div className="lux-panel p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="section-kicker">Local Footer</p>
+              <h2 className="font-display mt-4 text-2xl font-semibold text-white sm:text-[2rem]">
+                Built for Saharanpur students and parents
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-cyan-50/78 sm:text-base">
+                Vidya Share is a {NETWORK_CITY}-focused marketplace for second-hand school books, local pickups, and
+                practical textbook reuse. The goal is simple: help families save money and make the city’s student resale
+                network easier to understand.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <a
+                href="/used-school-books-saharanpur.html"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-cyan-300/20 bg-white/6 px-4 py-2.5 font-semibold text-cyan-50 transition hover:bg-white/10"
+              >
+                Saharanpur book guide
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+      ) : null}
 
       {reserveNotice && (
         <div className="fixed inset-0 z-[195] flex items-center justify-center bg-black/78 p-4 backdrop-blur-md">
@@ -1423,74 +1720,27 @@ export default function Feed({
             >
               {isReserveSubmitting ? 'Sending request...' : 'Send Reserve Request'}
             </button>
+            <p className="mt-3 rounded-lg border border-cyan-300/14 bg-[#08111a]/88 px-3 py-3 text-xs leading-relaxed text-cyan-50/68">
+              {DIRECT_TRANSACTION_NOTICE}
+            </p>
             {reserveError && <p className="mt-3 rounded-lg border border-rose-200/45 bg-rose-300/20 px-3 py-2 text-sm font-semibold text-rose-100">{reserveError}</p>}
           </form>
         </div>
       )}
 
-      {activeProfile && (
-        <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/78 p-4 backdrop-blur-md">
-          <div className="glass-panel w-full max-w-md rounded-[1.6rem] border border-cyan-300/16 bg-[#07111a]/96 p-5 shadow-[0_30px_90px_rgba(2,10,16,0.68)] sm:p-6">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-cyan-100/62">Seller Profile</p>
-                <h3 className="font-display mt-1 text-2xl font-semibold text-white">
-                  {activeProfile.displayName || activeProfile.fallbackName || 'Community Member'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveProfile(null)}
-                className="rounded-lg border border-cyan-300/20 bg-[#08111a]/88 p-2 text-cyan-50/82 transition hover:border-cyan-300/40 hover:text-white"
-                aria-label="Close profile view"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      <ReportListingModal
+        isOpen={Boolean(reportTarget)}
+        listingTitle={reportTarget?.title || ''}
+        reason={reportReason}
+        details={reportDetails}
+        onReasonChange={setReportReason}
+        onDetailsChange={setReportDetails}
+        onClose={closeReportModal}
+        onSubmit={submitReport}
+        isSubmitting={isReportSubmitting}
+        error={reportError}
+      />
 
-            <div className="space-y-3 text-sm text-cyan-50/82">
-              <p>
-                Role: <span className="text-white">{activeProfile.role || 'Parent'}</span>
-              </p>
-              <p>
-                School / college: <span className="text-white">{activeProfile.primarySchool || activeProfile.fallbackSchool || 'Not shared'}</span>
-              </p>
-              <p>
-                Colony: <span className="text-white">{activeProfile.colony || 'Not shared'}</span>
-              </p>
-              {activeProfile.responseSpeed && (
-                <p>
-                  Response: <span className="text-white">{activeProfile.responseSpeed}</span>
-                </p>
-              )}
-              {activeProfile.profileTagline && (
-                <p className="rounded-xl border border-cyan-300/16 bg-[#08111a]/86 p-3 text-cyan-50/82">{activeProfile.profileTagline}</p>
-              )}
-              {activeProfile.preferredMeetup && (
-                <p>
-                  Preferred handover: <span className="text-white">{activeProfile.preferredMeetup}</span>
-                </p>
-              )}
-              {activeProfile.availability && (
-                <p>
-                  Availability: <span className="text-white">{activeProfile.availability}</span>
-                </p>
-              )}
-              {activeProfile.bio && (
-                <p className="rounded-xl border border-cyan-300/16 bg-[#08111a]/86 p-3 text-cyan-50/82">{activeProfile.bio}</p>
-              )}
-              {activeProfile.showPhoneOnProfile && (activeProfile.phone || activeProfile.phoneFromListing) && (
-                <p>
-                  Contact: <span className="text-white">{activeProfile.phone || activeProfile.phoneFromListing}</span>
-                </p>
-              )}
-              <p>
-                Successful handovers: <span className="text-emerald-200">{activeProfile.successfulHandovers || 0}</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

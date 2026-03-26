@@ -1,0 +1,45 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#06101A" />
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <circle cx="184" cy="78" r="230" fill="url(#glow1)" />
+  <circle cx="980" cy="120" r="220" fill="url(#glow2)" />
+  <circle cx="930" cy="600" r="240" fill="url(#glow3)" />
+  <rect x="72" y="74" width="1056" height="482" rx="36" fill="#050C13" fill-opacity="0.72" stroke="#97EBFF" stroke-opacity="0.22" />
+  <rect x="112" y="116" width="92" height="92" rx="24" fill="url(#tile)" />
+  <path d="M148 142C162.359 142 174 153.641 174 168V182C174 196.359 162.359 208 148 208C133.641 208 122 196.359 122 182V168C122 153.641 133.641 142 148 142Z" fill="#041018" fill-opacity="0.88" />
+  <text x="240" y="164" fill="#F3FCFF" font-size="54" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="800">VidyaShare</text>
+  <text x="240" y="208" fill="#97EBFF" font-size="24" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="700" letter-spacing="5">SAHARANPUR STUDENT MARKETPLACE</text>
+  <text x="112" y="304" fill="#FFFFFF" font-size="64" font-family="Syne, Arial, sans-serif" font-weight="700">Buy &amp; Sell School Books</text>
+  <text x="112" y="374" fill="#FFFFFF" font-size="64" font-family="Syne, Arial, sans-serif" font-weight="700">in Saharanpur</text>
+  <text x="112" y="444" fill="#D7F8FF" font-size="28" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="600">
+    Save money. Help other students. No middleman.
+  </text>
+  <rect x="112" y="486" width="250" height="54" rx="27" fill="#5BE8FF" />
+  <text x="165" y="521" fill="#041018" font-size="24" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="800">Browse Books</text>
+  <rect x="382" y="486" width="208" height="54" rx="27" fill="#FFFFFF" fill-opacity="0.08" stroke="#97EBFF" stroke-opacity="0.24" />
+  <text x="434" y="521" fill="#F3FCFF" font-size="24" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="700">Sell Your Book</text>
+  <defs>
+    <linearGradient id="bg" x1="97" y1="32" x2="1089" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111A" />
+      <stop offset="0.45" stop-color="#081521" />
+      <stop offset="1" stop-color="#04070D" />
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(184 78) rotate(90) scale(230)">
+      <stop stop-color="#4FD7FF" stop-opacity="0.24" />
+      <stop offset="1" stop-color="#4FD7FF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(980 120) rotate(90) scale(220)">
+      <stop stop-color="#2B7FFF" stop-opacity="0.2" />
+      <stop offset="1" stop-color="#2B7FFF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glow3" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(930 600) rotate(90) scale(240)">
+      <stop stop-color="#4FD7FF" stop-opacity="0.16" />
+      <stop offset="1" stop-color="#4FD7FF" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="tile" x1="112" y1="116" x2="204" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8FBFF" />
+      <stop offset="0.55" stop-color="#5BE8FF" />
+      <stop offset="1" stop-color="#1A9FD0" />
+    </linearGradient>
+  </defs>
+</svg>

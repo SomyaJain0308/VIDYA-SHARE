@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { getDocs, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Send, Loader2, Radar, Sparkles, Clock3, BookOpen, Wallet, Building2 } from 'lucide-react';
+import { Send, Loader2, Radar, Sparkles, Clock3, BookOpen, Wallet, Search } from 'lucide-react';
 import { sendLocalNotification } from '../utils/notifications';
 import { normalizeText, extractKeywords, isLikelyMatch } from '../utils/matching';
-import { normalizeSchoolInput } from '../data/schools';
+import { SUPPORT_EMAIL } from '../config/compliance';
+import { containsBlockedMarketplaceTerms, getBlockedContentMessage } from '../utils/marketplaceCompliance';
+import { createMarketplaceRequest } from '../utils/requestIntegrity';
+import { buildRequestBoardQuery, fetchMatchingListingCandidates } from '../utils/firestoreMarketplaceQueries';
+import { trackRequestCreated } from '../utils/analytics';
 
 const requestCategoryOptions = ['Books'];
 const urgencyOptions = ['Anytime', 'This week', 'Urgent'];
@@ -34,7 +38,7 @@ const formatRequestTime = (timestamp) => {
 };
 
 export default function Requests({ userProfile, onRequireAuth }) {
-  const NETWORK_CITY = 'Lucknow';
+  const NETWORK_CITY = 'Saharanpur';
   const [requests, setRequests] = useState([]);
   const [formData, setFormData] = useState({
     text: '',
@@ -46,39 +50,69 @@ export default function Requests({ userProfile, onRequireAuth }) {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [requestSearch, setRequestSearch] = useState('');
+  const [requestStatusFilter, setRequestStatusFilter] = useState('all');
+  const [requestUrgencyFilter, setRequestUrgencyFilter] = useState('all');
 
   const requesterContactPhone = userProfile?.contactPhone || userProfile?.phone || auth.currentUser?.phoneNumber || '';
   const currentUserId = auth.currentUser?.uid || '';
-  const visibleRequests = requests.slice(0, 8);
+  const normalizedRequestSearch = normalizeText(requestSearch).trim();
+  const filteredRequests = requests
+    .filter((request) => {
+      if (requestStatusFilter === 'all') return true;
+      return (request.status || 'open') === requestStatusFilter;
+    })
+    .filter((request) => {
+      if (requestUrgencyFilter === 'all') return true;
+      return (request.urgency || 'Anytime') === requestUrgencyFilter;
+    })
+    .filter((request) => {
+      if (!normalizedRequestSearch) return true;
+      const requestText = normalizeText(
+        `${request.text || ''} ${request.subject || ''} ${request.requesterName || ''} ${request.school || request.requesterSchool || ''}`
+      );
+      return requestText.includes(normalizedRequestSearch);
+    });
+  const visibleRequests = filteredRequests.slice(0, 12);
 
   useEffect(() => {
-    const requestsQuery = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(requestsQuery, (snapshot) => {
-      const nextRequests = [];
-      snapshot.forEach((entry) => nextRequests.push({ id: entry.id, ...entry.data() }));
-      setRequests(nextRequests);
-    });
-    return () => unsubscribe();
-  }, []);
+    if (!auth.currentUser) {
+      setRequests([]);
+      return undefined;
+    }
+
+    const loadRequests = async () => {
+      try {
+        const snapshot = await getDocs(buildRequestBoardQuery({ db }));
+        const nextRequests = [];
+        snapshot.forEach((entry) => nextRequests.push({ id: entry.id, ...entry.data() }));
+        setRequests(nextRequests);
+      } catch (error) {
+        console.error('Error loading request board:', error);
+      }
+    };
+
+    loadRequests();
+    return undefined;
+  }, [currentUserId]);
 
   const pingPotentialSellers = async ({
-    requestId,
     requestText,
     requestKeywords,
-    requestCategory,
-    requestSchool,
     requestSubject,
     requestBudget,
   }) => {
     try {
-      const noticesSnapshot = await getDocs(collection(db, 'notices'));
+      const candidateListings = await fetchMatchingListingCandidates({
+        db,
+        subject: requestSubject,
+        maxPrice: typeof requestBudget === 'number' ? requestBudget : null,
+        excludeSellerId: currentUserId,
+      });
       let pingCount = 0;
 
-      for (const noticeDoc of noticesSnapshot.docs) {
-        const notice = noticeDoc.data();
+      for (const notice of candidateListings) {
         if (!notice?.sellerId) continue;
-        if (notice.status && notice.status !== 'active') continue;
-        if (requestCategory && notice.category !== requestCategory) continue;
         if (requestSubject && !includesToken(notice.subject, requestSubject)) continue;
         if (typeof requestBudget === 'number' && requestBudget > 0) {
           const noticePrice = Number(notice.price || 0);
@@ -89,19 +123,6 @@ export default function Requests({ userProfile, onRequireAuth }) {
         const noticeKeywords = Array.isArray(notice.keywords) ? notice.keywords : extractKeywords(noticeText);
         const matched = isLikelyMatch(requestText, noticeText, requestKeywords, noticeKeywords);
         if (!matched) continue;
-
-        const alertId = `request_${requestId}_seller_${notice.sellerId}_${noticeDoc.id}`;
-        await setDoc(doc(db, 'alerts', alertId), {
-          type: 'request_match',
-          recipientId: notice.sellerId,
-          recipientPhone: notice.sellerPhone || '',
-          requestId,
-          noticeId: noticeDoc.id,
-          title: 'Wishlist Match',
-          body: `Someone requested: "${requestText}". You may have a match.`,
-          read: false,
-          createdAt: serverTimestamp(),
-        });
         pingCount += 1;
       }
 
@@ -128,6 +149,10 @@ export default function Requests({ userProfile, onRequireAuth }) {
       setSubmitError('Add a contact number in profile before posting requests so sellers can respond.');
       return;
     }
+    if (containsBlockedMarketplaceTerms(`${trimmedRequest} ${cleanSubject}`)) {
+      setSubmitError(getBlockedContentMessage('request'));
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError('');
     try {
@@ -142,23 +167,20 @@ export default function Requests({ userProfile, onRequireAuth }) {
         school: '',
         budget: Number.isNaN(budgetValue) ? 0 : budgetValue,
         urgency: formData.urgency,
-        requesterId: auth.currentUser.uid,
         requesterName: userProfile?.displayName || auth.currentUser.displayName || 'Community member',
-        requesterPhone: requesterContactPhone,
         requesterSchool: userProfile?.primarySchool || '',
         status: 'open',
         matchedCount: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       };
 
-      const requestDoc = await addDoc(collection(db, 'requests'), requestPayload);
+      const requestDoc = await createMarketplaceRequest({
+        db,
+        currentUser: auth.currentUser,
+        requestPayload,
+      });
       const matches = await pingPotentialSellers({
-        requestId: requestDoc.id,
         requestText: trimmedRequest,
         requestKeywords,
-        requestCategory: requestPayload.category,
-        requestSchool: '',
         requestSubject: cleanSubject,
         requestBudget: requestPayload.budget,
       });
@@ -173,6 +195,13 @@ export default function Requests({ userProfile, onRequireAuth }) {
       } else {
         sendLocalNotification('Request Posted', 'Your request is live in the neighborhood board.');
       }
+      trackRequestCreated({
+        request: {
+          ...requestPayload,
+          status: matches > 0 ? 'matched' : requestPayload.status,
+        },
+        matchedCount: matches,
+      });
 
       setFormData({
         text: '',
@@ -183,7 +212,7 @@ export default function Requests({ userProfile, onRequireAuth }) {
       });
     } catch (error) {
       console.error('Request post failed', error);
-      setSubmitError('Could not post request right now. Please try again.');
+      setSubmitError(error?.message || 'Could not post request right now. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -191,7 +220,8 @@ export default function Requests({ userProfile, onRequireAuth }) {
 
   return (
     <div className="mx-auto w-full max-w-[1650px] px-1 pb-14 pt-4 sm:px-2 lg:px-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,720px)_minmax(0,1fr)] xl:items-start">
+      <div className="grid gap-4 xl:grid-cols-[minmax(320px,720px)_minmax(0,1fr)] xl:items-start">
+        <section className="space-y-4 xl:sticky xl:top-5">
         <section className="editorial-shell mx-auto w-full max-w-[720px] p-5 sm:p-6 xl:mx-0">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
@@ -205,6 +235,14 @@ export default function Requests({ userProfile, onRequireAuth }) {
               <Sparkles className="h-3.5 w-3.5" />
               Intent matching
             </div>
+          </div>
+
+          <div className="mb-4 rounded-[1.4rem] border border-cyan-300/14 bg-[#08111a]/84 p-4 text-sm leading-relaxed text-cyan-50/76">
+            Requests must be lawful, school-related, and accurate. Prohibited or unsafe item requests may be removed, and serious concerns can be reported to{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold text-cyan-100 underline-offset-4 hover:underline">
+              {SUPPORT_EMAIL}
+            </a>
+            .
           </div>
 
           <form onSubmit={handlePostRequest} className="space-y-3">
@@ -276,6 +314,8 @@ export default function Requests({ userProfile, onRequireAuth }) {
           </form>
         </section>
 
+        </section>
+
         <section className="lux-panel p-4 sm:p-5">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -284,8 +324,42 @@ export default function Requests({ userProfile, onRequireAuth }) {
               <p className="mt-2 text-sm text-cyan-50/72">A cleaner board helps sellers scan demand instead of guessing what people need.</p>
             </div>
             <div className="rounded-full border border-cyan-300/16 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-cyan-50/78">
-              {requests.length} total requests
+              {filteredRequests.length} visible requests
             </div>
+          </div>
+
+          <div className="mb-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
+            <label className="mobile-search-shell !mt-0">
+              <Search className="h-4 w-4 shrink-0 text-cyan-50/50" />
+              <input
+                type="text"
+                value={requestSearch}
+                onChange={(event) => setRequestSearch(event.target.value)}
+                placeholder="Filter requests"
+                className="lux-input min-w-0 flex-1 text-sm"
+              />
+            </label>
+            <select
+              value={requestStatusFilter}
+              onChange={(event) => setRequestStatusFilter(event.target.value)}
+              className="lux-select text-sm font-medium"
+            >
+              <option value="all" className="bg-[#161006]">All statuses</option>
+              <option value="open" className="bg-[#161006]">Open</option>
+              <option value="matched" className="bg-[#161006]">Matched</option>
+            </select>
+            <select
+              value={requestUrgencyFilter}
+              onChange={(event) => setRequestUrgencyFilter(event.target.value)}
+              className="lux-select text-sm font-medium"
+            >
+              <option value="all" className="bg-[#161006]">All urgency</option>
+              {urgencyOptions.map((option) => (
+                <option key={option} value={option} className="bg-[#161006]">
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
 
           {visibleRequests.length === 0 ? (
@@ -305,7 +379,11 @@ export default function Requests({ userProfile, onRequireAuth }) {
                     : 'bg-cyan-300/10 text-cyan-50 border-cyan-300/18';
 
                 return (
-                  <article key={request.id} className="lux-panel-soft flex h-full flex-col p-4">
+                  <article
+                    key={request.id}
+                    className="lux-panel-soft relative flex h-full flex-col overflow-hidden p-4"
+                  >
+                    <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(79,215,255,0.14),transparent_72%)]" />
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="line-clamp-2 text-base font-semibold text-white">{request.text}</p>
@@ -319,35 +397,28 @@ export default function Requests({ userProfile, onRequireAuth }) {
                       </span>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-cyan-50/76">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/14 bg-[#07111a]/78 px-2.5 py-1">
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-cyan-50/80">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/24 bg-cyan-300/10 px-2.5 py-1 text-cyan-50/88">
                         <BookOpen className="h-3.5 w-3.5" />
                         {request.category || 'Books'}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/14 bg-[#07111a]/78 px-2.5 py-1">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/24 bg-cyan-300/10 px-2.5 py-1 text-cyan-50/88">
                         <Clock3 className="h-3.5 w-3.5" />
                         {request.urgency || 'Anytime'}
                       </span>
                       {request.subject && (
-                        <span className="rounded-full border border-cyan-300/14 bg-[#07111a]/78 px-2.5 py-1">
+                        <span className="rounded-full border border-cyan-300/24 bg-cyan-300/10 px-2.5 py-1 text-cyan-50/88">
                           {request.subject}
                         </span>
                       )}
                     </div>
 
-                    <div className="mt-3 grid gap-2 text-xs text-cyan-50/68 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-cyan-300/12 bg-[#07111a]/78 px-3 py-2.5">
+                    <div className="mt-3 grid gap-2 text-xs text-cyan-50/68">
+                      <div className="rounded-2xl border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(10,24,34,0.96),rgba(7,17,26,0.92))] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(135,236,255,0.06)]">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-50/50">Budget</p>
                         <p className="mt-1 inline-flex items-center gap-1 font-semibold text-cyan-50/86">
                           <Wallet className="h-3.5 w-3.5" />
                           {request.budget ? `Rs ${request.budget}` : 'Flexible'}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-cyan-300/12 bg-[#07111a]/78 px-3 py-2.5">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-50/50">Institution</p>
-                        <p className="mt-1 inline-flex items-center gap-1 font-semibold text-cyan-50/86">
-                          <Building2 className="h-3.5 w-3.5" />
-                          {request.school || request.requesterSchool || 'City-wide'}
                         </p>
                       </div>
                     </div>
@@ -355,7 +426,7 @@ export default function Requests({ userProfile, onRequireAuth }) {
                     <div className="mt-auto flex items-center justify-between gap-3 pt-4">
                       <p className="text-[11px] font-semibold text-cyan-50/52">{formatRequestTime(request.createdAt)}</p>
                       {request.matchedCount > 0 && (
-                        <span className="rounded-full border border-emerald-200/30 bg-emerald-200/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100">
+                        <span className="rounded-full border border-cyan-300/30 bg-cyan-300/14 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-100">
                           {request.matchedCount} matches
                         </span>
                       )}

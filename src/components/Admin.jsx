@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, deleteDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ShieldAlert, Trash2, Sparkles, Loader2, Database, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { buildListingTrustFlags, findBlockedMarketplaceTerms } from '../utils/marketplaceCompliance';
+import { deleteListingWithRelations } from '../utils/listingIntegrity';
 
 const demoListings = [
   { title: 'Science Textbook Set', category: 'Books', subject: 'Science', price: 220, condition: 'Good' },
@@ -10,7 +12,7 @@ const demoListings = [
   { title: 'Physics Notes Bundle', category: 'Books', subject: 'Physics', price: 150, condition: 'Good' },
   { title: 'Chemistry PYQ Book', category: 'Books', subject: 'Chemistry', price: 240, condition: 'Like New' },
   { title: 'Campus Essentials Set - Medium', category: 'Uniforms', school: 'City Montessori School, Gomti Nagar I', size: 'M', price: 450, condition: 'Good' },
-  { title: 'Winter Blazer', category: 'Uniforms', school: 'La Martiniere College, Lucknow', size: '30', price: 600, condition: 'Good' },
+  { title: 'Winter Blazer', category: 'Uniforms', school: 'Delhi Public School, Saharanpur', size: '30', price: 600, condition: 'Good' },
   { title: 'Sports Kit Shorts + Tee', category: 'Uniforms', school: 'Delhi Public School, Shaheed Path', size: '32', price: 250, condition: 'Fair' },
   { title: 'Girls Essentials Pair', category: 'Uniforms', school: 'Seth M.R. Jaipuria School, Vineet Khand', size: '28', price: 500, condition: 'Like New' },
   { title: 'House T-Shirt Set', category: 'Uniforms', school: 'St. Agnes\' Loreto Day School', size: 'S', price: 200, condition: 'Good' },
@@ -32,7 +34,7 @@ const normalizeTitle = (value) =>
 
 export default function Admin({ isAdmin = false }) {
   const [reports, setReports] = useState([]);
-  const [notices, setNotices] = useState([]);
+  const [listings, setListings] = useState([]);
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
   const [dealRequests, setDealRequests] = useState([]);
@@ -47,10 +49,10 @@ export default function Admin({ isAdmin = false }) {
       setReports(nextReports);
     });
 
-    const unsubscribeNotices = onSnapshot(collection(db, 'notices'), (snapshot) => {
-      const nextNotices = [];
-      snapshot.forEach((entry) => nextNotices.push({ id: entry.id, ...entry.data() }));
-      setNotices(nextNotices);
+    const unsubscribeListings = onSnapshot(collection(db, 'publicListings'), (snapshot) => {
+      const nextListings = [];
+      snapshot.forEach((entry) => nextListings.push({ id: entry.id, ...entry.data() }));
+      setListings(nextListings);
     });
 
     const unsubscribeRequests = onSnapshot(collection(db, 'requests'), (snapshot) => {
@@ -73,7 +75,7 @@ export default function Admin({ isAdmin = false }) {
 
     return () => {
       unsubscribeReports();
-      unsubscribeNotices();
+      unsubscribeListings();
       unsubscribeRequests();
       unsubscribeUsers();
       unsubscribeDeals();
@@ -81,51 +83,78 @@ export default function Admin({ isAdmin = false }) {
   }, [isAdmin]);
 
   const metrics = useMemo(() => {
-    const activeListings = notices.filter((notice) => (notice.status || 'active') === 'active').length;
+    const activeListings = listings.filter((listing) => (listing.status || 'active') === 'active').length;
     const openRequests = requests.filter((request) => (request.status || 'open') !== 'fulfilled').length;
     const completedHandovers = dealRequests.filter((deal) => (deal.status || 'pending') === 'completed').length;
+    const openReports = reports.filter((report) => (report.status || 'open') !== 'resolved').length;
     return {
       users: users.length,
-      listings: notices.length,
+      listings: listings.length,
       activeListings,
       openRequests,
       completedHandovers,
+      openReports,
     };
-  }, [notices, requests, users, dealRequests]);
+  }, [listings, requests, users, dealRequests, reports]);
 
   const suspiciousListings = useMemo(() => {
     const normalizedCount = {};
-    notices.forEach((notice) => {
-      const normalized = normalizeTitle(notice.title);
+    listings.forEach((listing) => {
+      const normalized = normalizeTitle(listing.title);
       if (!normalized) return;
       normalizedCount[normalized] = (normalizedCount[normalized] || 0) + 1;
     });
 
-    return notices.filter((notice) => {
-      const normalized = normalizeTitle(notice.title);
+    return listings.filter((listing) => {
+      const normalized = normalizeTitle(listing.title);
       const duplicateByTitle = normalized && normalizedCount[normalized] > 1;
-      const noisyTitle = /(.)\1{3,}/.test(String(notice.title || '').toLowerCase());
-      const missingSeller = !notice.sellerId || !notice.sellerPhone;
-      return duplicateByTitle || noisyTitle || missingSeller;
+      const trustFlags = buildListingTrustFlags(listing);
+      const blockedTerms = findBlockedMarketplaceTerms(`${listing.title || ''} ${listing.description || ''} ${listing.subject || ''} ${listing.successNote || ''}`);
+      return duplicateByTitle || trustFlags.length > 0 || blockedTerms.length > 0;
     });
-  }, [notices]);
+  }, [listings]);
 
-  const handleDismissReport = async (reportId) => {
-    if (!window.confirm('Dismiss this report?')) return;
+  const suspiciousSellerSummaries = useMemo(() => {
+    const reportCountBySeller = reports.reduce((acc, report) => {
+      const sellerId = report.sellerId || '';
+      if (!sellerId) return acc;
+      acc[sellerId] = (acc[sellerId] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(reportCountBySeller)
+      .map(([sellerId, reportCount]) => {
+        const sellerListings = listings.filter((listing) => listing.sellerId === sellerId);
+        const suspiciousCount = sellerListings.filter((listing) => buildListingTrustFlags(listing).length > 0).length;
+        const sellerName = sellerListings[0]?.sellerName || sellerId;
+        return {
+          sellerId,
+          sellerName,
+          reportCount,
+          suspiciousCount,
+        };
+      })
+      .filter((entry) => entry.reportCount > 0 || entry.suspiciousCount > 0)
+      .sort((a, b) => (b.reportCount + b.suspiciousCount) - (a.reportCount + a.suspiciousCount))
+      .slice(0, 8);
+  }, [listings, reports]);
+
+  const handleUpdateReportStatus = async (reportId, nextStatus) => {
     try {
-      await deleteDoc(doc(db, 'reports', reportId));
+      await updateDoc(doc(db, 'reports', reportId), {
+        status: nextStatus,
+        resolvedAt: nextStatus === 'resolved' ? serverTimestamp() : null,
+        updatedAt: serverTimestamp(),
+      });
     } catch (error) {
-      console.error('Error deleting report:', error);
+      console.error('Error updating report:', error);
     }
   };
 
   const handleRemoveListing = async (listingId) => {
     if (!window.confirm('Delete this listing from marketplace?')) return;
     try {
-      await deleteDoc(doc(db, 'notices', listingId));
-      const reportSnapshot = await getDocs(collection(db, 'reports'));
-      const linkedReports = reportSnapshot.docs.filter((entry) => entry.data()?.reportedItemId === listingId);
-      await Promise.all(linkedReports.map((entry) => deleteDoc(doc(db, 'reports', entry.id))));
+      await deleteListingWithRelations({ db, listingId });
     } catch (error) {
       console.error('Error deleting listing:', error);
     }
@@ -139,16 +168,20 @@ export default function Admin({ isAdmin = false }) {
       await Promise.all(
         demoListings.map((listing, index) => {
           const imageUrl = randomImagePool[index % randomImagePool.length];
-          return addDoc(collection(db, 'notices'), {
+          return addDoc(collection(db, 'publicListings'), {
             ...listing,
+            description: 'Demo listing for marketplace preview only. Replace with a real description before launch.',
             successNote: 'Demo listing for marketplace preview.',
             colony: 'Gomti Nagar',
             sellerName: 'Demo Seller',
-            sellerSchool: listing.school || 'Lucknow',
+            sellerSchool: listing.school || 'Saharanpur',
             sellerId: `demo-seller-${(index % 3) + 1}`,
-            sellerPhone: `98976010${String(index).padStart(2, '0')}`,
+            sellerRole: 'Parent',
+            sellerContactConsent: false,
             photoUrl: imageUrl,
-            keywords: normalizeTitle(`${listing.title} ${listing.subject || ''} ${listing.school || ''}`).split(' '),
+            photoUrls: [imageUrl],
+            imageCount: 1,
+            sellerVerificationStatus: 'pending',
             status: 'active',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -199,6 +232,10 @@ export default function Admin({ isAdmin = false }) {
           <p className="text-xs uppercase tracking-[0.16em] text-amber-100/62">Handovers</p>
           <p className="font-display mt-1 text-3xl font-semibold text-emerald-200">{metrics.completedHandovers}</p>
         </div>
+        <div className="glass-panel rounded-2xl p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-amber-100/62">Open Reports</p>
+          <p className="font-display mt-1 text-3xl font-semibold text-rose-100">{metrics.openReports}</p>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-3">
@@ -222,13 +259,45 @@ export default function Admin({ isAdmin = false }) {
           {reports.length === 0 && <p className="text-sm text-slate-100/75">No active reports.</p>}
           {reports.map((report) => (
             <div key={report.id} className="mb-2 rounded-xl border border-slate-200/20 bg-slate-900/35 p-3">
-              <p className="text-sm font-medium text-slate-100">Listing: {report.reportedItemId || 'Unknown'}</p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-100">{report.noticeTitle || report.reportedItemId || 'Unknown listing'}</p>
+                  <p className="mt-1 text-xs text-slate-100/70">Seller: {report.sellerName || report.sellerId || 'Unknown'}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                  <span className="rounded-full border border-slate-200/20 bg-white/5 px-2.5 py-1 text-slate-100/82">
+                    {report.status || 'open'}
+                  </span>
+                  <span className={`rounded-full px-2.5 py-1 ${
+                    report.severity === 'high'
+                      ? 'bg-rose-300/85 text-[#4a1b25]'
+                      : report.severity === 'low'
+                        ? 'bg-amber-200/85 text-[#3a2608]'
+                        : 'bg-cyan-200 text-[#082231]'
+                  }`}>
+                    {report.severity || 'medium'}
+                  </span>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-100/70">Reporter: {report.reporterName || report.reporterId || 'Unknown'}</p>
+              <p className="mt-1 text-xs text-slate-100/70">Reason: {report.reason || 'Not provided'}</p>
+              {report.details ? (
+                <p className="mt-2 rounded-lg border border-slate-200/12 bg-[#08111a]/88 p-2 text-xs leading-relaxed text-slate-100/78">
+                  {report.details}
+                </p>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
-                  onClick={() => handleDismissReport(report.id)}
+                  onClick={() => handleUpdateReportStatus(report.id, 'reviewing')}
                   className="rounded-lg border border-amber-200/30 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-100/10"
                 >
-                  Dismiss
+                  Mark reviewing
+                </button>
+                <button
+                  onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
+                  className="rounded-lg border border-emerald-200/30 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-100/10"
+                >
+                  Resolve
                 </button>
                 {report.reportedItemId && (
                   <button
@@ -259,6 +328,16 @@ export default function Admin({ isAdmin = false }) {
             <div key={listing.id} className="mb-2 rounded-xl border border-amber-200/20 bg-[#191208]/70 p-3">
               <p className="text-sm font-semibold text-amber-50">{listing.title || 'Untitled listing'}</p>
               <p className="mt-1 text-xs text-amber-100/70">Seller: {listing.sellerName || listing.sellerId || 'Unknown'}</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                {buildListingTrustFlags(listing).map((flag) => (
+                  <span
+                    key={`${listing.id}-${flag}`}
+                    className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-amber-50/90"
+                  >
+                    {flag}
+                  </span>
+                ))}
+              </div>
               <button
                 onClick={() => handleRemoveListing(listing.id)}
                 className="mt-2 inline-flex items-center gap-1 rounded-lg bg-rose-300/85 px-3 py-1.5 text-xs font-semibold text-[#4a1b25] transition hover:bg-rose-200"
@@ -269,6 +348,33 @@ export default function Admin({ isAdmin = false }) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="glass-panel mt-6 rounded-[1.8rem] p-5">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <AlertTriangle className="h-5 w-5 text-amber-200" />
+          Seller Watchlist
+        </h2>
+        {suspiciousSellerSummaries.length === 0 ? (
+          <p className="text-sm text-slate-100/75">No repeat-risk sellers are standing out right now.</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {suspiciousSellerSummaries.map((seller) => (
+              <div key={seller.sellerId} className="rounded-xl border border-slate-200/20 bg-slate-900/35 p-3">
+                <p className="text-sm font-semibold text-white">{seller.sellerName}</p>
+                <p className="mt-1 text-xs text-slate-100/70">Seller ID: {seller.sellerId}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+                  <span className="rounded-full border border-rose-200/24 bg-rose-300/10 px-2.5 py-1 text-rose-100">
+                    {seller.reportCount} report{seller.reportCount === 1 ? '' : 's'}
+                  </span>
+                  <span className="rounded-full border border-amber-200/24 bg-amber-200/10 px-2.5 py-1 text-amber-50">
+                    {seller.suspiciousCount} flagged listing{seller.suspiciousCount === 1 ? '' : 's'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="glass-panel mt-6 rounded-[1.8rem] p-5">

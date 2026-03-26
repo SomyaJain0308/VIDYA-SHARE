@@ -86,16 +86,16 @@ export default function ShareCardGenerator({ item, onDone }) {
             </div>
 
             <div className="mt-16 rounded-[3rem] bg-white p-12 shadow-xl">
-              <p className="mb-4 text-4xl font-bold uppercase tracking-wide text-[#7a5418]">{item.school || 'Lucknow Campus Listing'}</p>
+              <p className="mb-4 text-4xl font-bold uppercase tracking-wide text-[#7a5418]">{item.school || 'Saharanpur Campus Listing'}</p>
               <h2 className="mb-8 text-7xl font-black leading-tight text-slate-900">{item.title}</h2>
 
               <div className="flex items-center gap-6">
                 <span className="rounded-3xl bg-slate-100 px-8 py-4 text-6xl font-black text-slate-900">
-                  {item.price === 0 ? 'FREE' : `Rs ${item.price}`}
+                  {item.price === 0 ? 'FREE' : `₹${item.price}`}
                 </span>
                 {item.savings > 0 && (
                   <span className="rounded-3xl bg-emerald-50 px-8 py-4 text-4xl font-bold text-emerald-600">
-                    Saves Rs {item.savings}
+                    Saves ₹{item.savings}
                   </span>
                 )}
               </div>

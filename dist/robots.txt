@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /__/
+Disallow: /__/auth/
+Disallow: /__/firebase/
 
 Sitemap: https://vidya-share-30112.web.app/sitemap.xml

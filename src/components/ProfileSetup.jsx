@@ -6,13 +6,27 @@ import { db, auth } from '../firebase';
 import SchoolSearchInput from './SchoolSearchInput';
 import { BrandMark } from './BrandLogo';
 import { LUCKNOW_SCHOOLS, normalizeSchoolInput } from '../data/schools';
+import { CONSENT_VERSION } from '../config/compliance';
+import { getStoredLegalAcceptance } from '../utils/consent';
+import { isBasicSellerVerificationComplete } from '../utils/marketplaceCompliance';
+
+const availabilityOptions = [
+  'Weekdays after school',
+  'Weekday evenings',
+  'Saturday only',
+  'Sunday only',
+  'Weekends',
+  'Flexible this week',
+];
 
 export default function ProfileSetup({ onComplete, onClose, initialProfile = {} }) {
   const [name, setName] = useState('');
   const [school, setSchool] = useState('');
   const [colony, setColony] = useState('');
+  const [city, setCity] = useState('');
+  const [stateName, setStateName] = useState('Uttar Pradesh');
   const [contactPhone, setContactPhone] = useState('');
-  const [role, setRole] = useState('Parent');
+  const [role, setRole] = useState('Student');
   const [responseSpeed, setResponseSpeed] = useState('');
   const [profileTagline, setProfileTagline] = useState('');
   const [preferredMeetup, setPreferredMeetup] = useState('');
@@ -20,13 +34,19 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
   const [bio, setBio] = useState('');
   const [showPhoneOnProfile, setShowPhoneOnProfile] = useState(false);
   const [publicProfile, setPublicProfile] = useState(true);
+  const [sellerContactConsent, setSellerContactConsent] = useState(false);
+  const [sellerRulesAccepted, setSellerRulesAccepted] = useState(false);
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const normalizedAuthPhone = String(auth.currentUser?.phoneNumber || '').replace(/\D/g, '').slice(-10);
+  const hasInvalidContactPhone = Boolean(contactPhone) && contactPhone.length !== 10;
 
   const completionSignals = [
     school,
     colony,
+    city,
+    stateName,
     contactPhone,
     responseSpeed,
     profileTagline,
@@ -39,8 +59,10 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     setName(initialProfile?.displayName || '');
     setSchool(initialProfile?.primarySchool || '');
     setColony(initialProfile?.colony || '');
-    setContactPhone((initialProfile?.contactPhone || initialProfile?.phone || auth.currentUser?.phoneNumber || '').replace(/\D/g, '').slice(-10));
-    setRole(initialProfile?.role || 'Parent');
+    setCity(initialProfile?.city || 'Saharanpur');
+    setStateName(initialProfile?.state || 'Uttar Pradesh');
+    setContactPhone((initialProfile?.contactPhone || initialProfile?.phone || normalizedAuthPhone || '').replace(/\D/g, '').slice(-10));
+    setRole(initialProfile?.role || 'Student');
     setResponseSpeed(initialProfile?.responseSpeed || '');
     setProfileTagline(initialProfile?.profileTagline || '');
     setPreferredMeetup(initialProfile?.preferredMeetup || '');
@@ -48,6 +70,8 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     setBio(initialProfile?.bio || '');
     setShowPhoneOnProfile(initialProfile?.showPhoneOnProfile === true);
     setPublicProfile(initialProfile?.publicProfile !== false);
+    setSellerContactConsent(initialProfile?.sellerContactConsent === true);
+    setSellerRulesAccepted(initialProfile?.sellerRulesAccepted === true);
     setShowAdvancedDetails(
       Boolean(
         (initialProfile?.profileTagline || '').trim() ||
@@ -56,7 +80,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
           (initialProfile?.bio || '').trim()
       )
     );
-  }, [initialProfile]);
+  }, [initialProfile, normalizedAuthPhone]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,28 +88,71 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
     if (!cleanName || !auth.currentUser) return;
 
     const normalizedContactPhone = contactPhone.replace(/\D/g, '').slice(-10);
+    const normalizedEmail = String(auth.currentUser.email || '').trim();
+    const cleanColony = colony.trim();
     if (contactPhone && normalizedContactPhone.length !== 10) {
       setSubmitError('Contact phone must be a valid 10-digit number.');
       return;
     }
+    if (!cleanColony) {
+      setSubmitError('Colony, street, or area is required.');
+      return;
+    }
+    if (sellerContactConsent && !normalizedContactPhone && !normalizedEmail) {
+      setSubmitError('Add a phone number or sign in with an email account before enabling Contact Seller.');
+      return;
+    }
+    if (sellerContactConsent && showPhoneOnProfile && !normalizedContactPhone) {
+      setSubmitError('Add a phone number before choosing to reveal it to buyers.');
+      return;
+    }
 
-    const profileValues = {
-      phone: normalizedContactPhone || auth.currentUser.phoneNumber || '',
+    const storedLegalAcceptance = getStoredLegalAcceptance();
+    const privateProfileValues = {
+      phone: normalizedContactPhone || normalizedAuthPhone || '',
       contactPhone: normalizedContactPhone,
-      email: auth.currentUser.email || '',
+      email: normalizedEmail,
       displayName: cleanName,
       role: role || 'Parent',
+      accountAccessMode: String(initialProfile?.accountAccessMode || '').trim(),
       responseSpeed: responseSpeed.trim(),
       profileTagline: profileTagline.trim(),
       primarySchool: normalizeSchoolInput(school),
-      colony: colony.trim(),
+      colony: cleanColony,
+      city: city.trim(),
+      state: stateName.trim(),
       preferredMeetup: preferredMeetup.trim(),
       availability: availability.trim(),
       bio: bio.trim(),
       publicProfile,
       showPhoneOnProfile,
-      isVerifiedParent: true,
-      karmaPoints: typeof initialProfile?.karmaPoints === 'number' ? initialProfile.karmaPoints : 10,
+      sellerContactConsent,
+      sellerRulesAccepted,
+      policyAcceptedVersion: storedLegalAcceptance?.accepted ? CONSENT_VERSION : '',
+      policyAcceptedAt: storedLegalAcceptance?.acceptedAt || '',
+    };
+    const basicSellerVerificationCompleted = isBasicSellerVerificationComplete(privateProfileValues);
+    const profileValues = {
+      ...privateProfileValues,
+      basicSellerVerificationCompleted,
+      sellerVerificationStatus: basicSellerVerificationCompleted ? 'basic-self-declared' : 'pending',
+    };
+    const publicProfileValues = {
+      displayName: cleanName,
+      primarySchool: publicProfile ? normalizeSchoolInput(school) : '',
+      publicProfile,
+      sellerRole: role || 'Parent',
+      sellerContactConsent,
+      basicSellerVerificationCompleted,
+      sellerVerificationStatus: basicSellerVerificationCompleted ? 'basic-self-declared' : 'pending',
+      updatedAt: serverTimestamp(),
+    };
+    const privateContactValues = {
+      contactPhone: normalizedContactPhone,
+      email: normalizedEmail,
+      contactRevealEnabled: sellerContactConsent,
+      revealPhone: showPhoneOnProfile,
+      updatedAt: serverTimestamp(),
     };
 
     setIsLoading(true);
@@ -98,6 +165,19 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
       if (!initialProfile?.createdAt) payload.createdAt = serverTimestamp();
 
       await setDoc(doc(db, 'users', auth.currentUser.uid), payload, { merge: true });
+      const publicPayload = {
+        ...publicProfileValues,
+      };
+      const privateContactPayload = {
+        ...privateContactValues,
+      };
+      if (!initialProfile?.createdAt) {
+        publicPayload.createdAt = serverTimestamp();
+        privateContactPayload.createdAt = serverTimestamp();
+      }
+
+      await setDoc(doc(db, 'publicProfiles', auth.currentUser.uid), publicPayload, { merge: true });
+      await setDoc(doc(db, 'privateContacts', auth.currentUser.uid), privateContactPayload, { merge: true });
       setIsLoading(false);
       onComplete({
         ...initialProfile,
@@ -106,7 +186,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
       });
     } catch (error) {
       console.error('Error saving profile', error);
-      setSubmitError('Could not save your profile right now. Please try again.');
+      setSubmitError(error?.message || 'Could not save your profile right now. Please try again.');
       setIsLoading(false);
     }
   };
@@ -143,13 +223,12 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                 <p className="lux-kicker">Profile Setup</p>
                 <h2 className="lux-title mt-2 text-2xl sm:text-3xl">Customize your profile</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-relaxed text-cyan-50/72">
-                  Build a stronger trust layer for every listing. Only your name is required, but the optional details below make buyers more likely to respond quickly.
+                  Add your marketplace identity and disclosure details. Basic seller verification stays self-declared unless the platform later introduces a formal review process.
                 </p>
               </div>
             </div>
             <div className="lux-chip-row">
-              <span className="lux-meta-chip">Lucknow network</span>
-              <span className="lux-meta-chip">{role || 'Parent'} account</span>
+              <span className="lux-meta-chip">{role || 'Student'} account</span>
             </div>
           </div>
         </div>
@@ -165,13 +244,17 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">{name.trim() || 'Your Name'}</p>
-                    <p className="text-xs text-cyan-50/70">{role || 'Parent'} account</p>
+                    <p className="text-xs text-cyan-50/70">{role || 'Student'} account</p>
                   </div>
                 </div>
                 <div className="lux-divider" />
                 <div className="mt-3 space-y-1">
-                  <p className="text-xs text-cyan-50/70">{school.trim() || 'Institution not set yet'}</p>
-                  <p className="text-xs text-cyan-50/62">{colony.trim() || 'Colony not set yet'}</p>
+                  {school.trim() ? <p className="text-xs text-cyan-50/70">{school.trim()}</p> : null}
+                  {colony.trim() ? <p className="text-xs text-cyan-50/62">{colony.trim()}</p> : null}
+                  {city.trim() ? <p className="text-xs text-cyan-50/62">{city.trim()}</p> : null}
+                  {responseSpeed.trim() ? (
+                    <p className="text-xs text-cyan-50/62">Replies {responseSpeed.trim()}</p>
+                  ) : null}
                   {profileTagline.trim() ? <p className="pt-2 text-sm text-cyan-50/84">"{profileTagline.trim()}"</p> : null}
                 </div>
               </div>
@@ -180,12 +263,12 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                 <div className="lux-stat-tile">
                   <p className="lux-kicker">Profile strength</p>
                   <strong>{Math.min(100, 10 + completionSignals * 9)}%</strong>
-                  <p className="mt-2 text-xs text-cyan-50/62">More optional context means higher trust on listings.</p>
+                  <p className="mt-2 text-xs text-cyan-50/62">More complete seller identity and disclosure data means safer listings.</p>
                 </div>
                 <div className="lux-stat-tile">
                   <p className="lux-kicker">Visible signals</p>
                   <strong>{completionSignals}</strong>
-                  <p className="mt-2 text-xs text-cyan-50/62">Response speed, meetup, bio, and availability all strengthen trust.</p>
+                  <p className="mt-2 text-xs text-cyan-50/62">Identity, city, response, and meetup details all strengthen compliance.</p>
                 </div>
               </div>
             </div>
@@ -193,9 +276,9 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
             <div className="lux-panel p-4 sm:p-5">
               <p className="lux-kicker">Why this matters</p>
               <ul className="mt-4 space-y-2 text-sm leading-relaxed text-cyan-50/72">
-                <li>Profiles make listings feel safer than anonymous classifieds.</li>
-                <li>Meetup and availability details reduce pointless chats.</li>
-                <li>Clear identity details help the right buyer trust you faster.</li>
+                <li>Seller identity details reduce anonymous or misleading listings.</li>
+                <li>Mandatory contact disclosures help buyers identify who they are dealing with.</li>
+                <li>Optional profile details can be hidden, but listing disclosures still remain mandatory.</li>
               </ul>
             </div>
           </aside>
@@ -214,7 +297,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                 <input
                   name="display_name"
                   type="text"
-                  placeholder="Your Name"
+                  placeholder="Display name"
                   required
                   autoFocus
                   autoComplete="off"
@@ -227,11 +310,37 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                 <input
                   name="colony_area"
                   type="text"
-                  placeholder="Colony / Area (Optional)"
+                  placeholder="Colony / Street / Area"
+                  required
                   autoComplete="address-level2"
                   className="lux-input text-sm font-medium"
                   value={colony}
-                  onChange={(e) => setColony(e.target.value)}
+                  onChange={(e) => {
+                    setColony(e.target.value);
+                    if (submitError === 'Colony, street, or area is required.') {
+                      setSubmitError('');
+                    }
+                  }}
+                />
+
+                <input
+                  name="city"
+                  type="text"
+                  placeholder="City"
+                  autoComplete="address-level2"
+                  className="lux-input text-sm font-medium"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
+
+                <input
+                  name="state"
+                  type="text"
+                  placeholder="State"
+                  autoComplete="address-level1"
+                  className="lux-input text-sm font-medium"
+                  value={stateName}
+                  onChange={(e) => setStateName(e.target.value)}
                 />
 
                 <input
@@ -244,10 +353,23 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                   autoCorrect="off"
                   spellCheck={false}
                   data-lpignore="true"
-                  className="lux-input text-sm font-medium sm:col-span-2"
+                  aria-invalid={hasInvalidContactPhone}
+                  className={`lux-input text-sm font-medium sm:col-span-2 ${
+                    hasInvalidContactPhone ? 'border-rose-300/60 focus:border-rose-300' : ''
+                  }`}
                   value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => {
+                    setContactPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+                    if (submitError === 'Contact phone must be a valid 10-digit number.') {
+                      setSubmitError('');
+                    }
+                  }}
                 />
+                {hasInvalidContactPhone ? (
+                  <p className="sm:col-span-2 text-sm font-semibold text-rose-100">
+                    Contact phone must be exactly 10 digits.
+                  </p>
+                ) : null}
 
                 <select
                   name="role"
@@ -289,6 +411,48 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
             </section>
 
             <section className="lux-panel p-4 sm:p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-cyan-300/14 pb-3">
+                <div>
+                  <p className="lux-kicker">Seller verification</p>
+                  <h3 className="lux-title mt-2 text-xl">Basic marketplace KYC</h3>
+                </div>
+                <p className="text-xs text-cyan-50/62">
+                  {isBasicSellerVerificationComplete({
+                    contactPhone,
+                    email: auth.currentUser?.email || initialProfile?.email || '',
+                    city,
+                    state: stateName,
+                    sellerContactConsent,
+                    sellerRulesAccepted,
+                  })
+                    ? 'Ready to list'
+                    : 'Needed before listing'}
+                </p>
+              </div>
+
+              <div className="grid gap-3 text-sm text-cyan-50/78">
+                <label className="lux-panel-soft flex cursor-pointer items-start gap-3 p-3.5">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-cyan-300"
+                    checked={sellerContactConsent}
+                    onChange={(e) => setSellerContactConsent(e.target.checked)}
+                  />
+                  <span>I consent to reveal my contact details only after a logged-in user clicks Contact Seller and confirms they want to reach me.</span>
+                </label>
+                <label className="lux-panel-soft flex cursor-pointer items-start gap-3 p-3.5">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-cyan-300"
+                    checked={sellerRulesAccepted}
+                    onChange={(e) => setSellerRulesAccepted(e.target.checked)}
+                  />
+                  <span>I confirm my listings will be lawful, accurate, non-misleading, and limited to permitted school-related goods.</span>
+                </label>
+              </div>
+            </section>
+
+            <section className="lux-panel p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="lux-kicker">Optional trust boosters</p>
@@ -318,7 +482,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                   <input
                     name="profile_tagline"
                     type="text"
-                    placeholder="Profile tagline (Optional)"
+                    placeholder="Short intro (e.g. Fast replies, science books, pickup near Court Road)"
                     autoComplete="off"
                     className="lux-input text-sm font-medium sm:col-span-2"
                     value={profileTagline}
@@ -335,25 +499,36 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                     onChange={(e) => setPreferredMeetup(e.target.value)}
                   />
 
-                  <input
+                  <select
                     name="availability"
-                    type="text"
-                    placeholder="Availability (Optional)"
                     autoComplete="off"
-                    className="lux-input text-sm font-medium sm:col-span-2"
+                    className="lux-select text-sm font-medium sm:col-span-2"
                     value={availability}
                     onChange={(e) => setAvailability(e.target.value)}
-                  />
+                  >
+                    <option className="text-slate-800" value="">
+                      Availability (Optional)
+                    </option>
+                    {availabilityOptions.map((option) => (
+                      <option key={option} className="text-slate-800" value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
 
                   <textarea
                     name="profile_bio"
                     rows="4"
-                    placeholder="Short profile bio (Optional)"
+                    placeholder="Short bio (e.g. Parent selling well-kept Class 10 and 12 books. Usually available on weekends for pickup.)"
                     autoComplete="off"
                     className="lux-textarea text-sm font-medium sm:col-span-2"
                     value={bio}
+                    maxLength={180}
                     onChange={(e) => setBio(e.target.value)}
                   />
+                  <p className="text-xs text-cyan-50/62 sm:col-span-2">
+                    Keep it short and useful. Max 180 characters.
+                  </p>
                 </div>
               )}
             </section>
@@ -368,7 +543,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                     checked={publicProfile}
                     onChange={(e) => setPublicProfile(e.target.checked)}
                   />
-                  <span>Show my profile publicly on my listings</span>
+                  <span>Show optional profile details publicly on my listings</span>
                 </label>
                 <label className="lux-panel-soft flex cursor-pointer items-start gap-3 p-3.5 text-sm text-cyan-50/84">
                   <input
@@ -377,7 +552,7 @@ export default function ProfileSetup({ onComplete, onClose, initialProfile = {} 
                     checked={showPhoneOnProfile}
                     onChange={(e) => setShowPhoneOnProfile(e.target.checked)}
                   />
-                  <span>Show phone number in profile card (WhatsApp button still works either way)</span>
+                  <span>Include my phone number in that controlled reveal. If unchecked, only my email will be shared after confirmation.</span>
                 </label>
               </div>
             </section>
